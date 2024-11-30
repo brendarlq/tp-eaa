@@ -9,6 +9,10 @@ Try executing this chunk by clicking the *Run* button within the chunk or by pla
 
 ```{r}
 install.packages("openxlsx")
+# Instalar el paquete si no está instalado
+if (!require("dplyr")) install.packages("dplyr")
+# Cargar el paquete
+library(dplyr)
 ```
 
 # Trabajo Práctico Final
@@ -19,7 +23,7 @@ install.packages("openxlsx")
 .
 ```{r}
 library(openxlsx)
-delitos <- read.xlsx("/Users/bquinonez//Downloads/delitos_2023.xlsx")
+delitos <- read.xlsx("/Users/bquinonez/Downloads/delitos_2023.xlsx")
 delitos
 ```
 ```{r}
@@ -30,13 +34,14 @@ summary(delitos)
 dim(delitos)
 ```
 
-# 1) Preprocesamiento
+# 2) Preprocesamiento
 
 ## Verificación de nulos
 
 ```{r}
 colSums(is.na(delitos))
 ```
+
 Tipos de Delitos
 
 ```{r}
@@ -126,7 +131,7 @@ delitos <- delitos %>%
 delitos
 
 ```
-Converisón de coordenas a númerico
+Conversión de coordenas a númericas
 
 ```{r}
 # Convertir longitud y latitud a numéricas y escalarlas correctamente
@@ -139,6 +144,111 @@ delitos <- delitos %>%
 # Verificar las primeras filas para confirmar
 head(delitos[c("longitud", "latitud")])
 ```
+Eliminación de Nulos (Pero tiene que ser transformación de nulos para no perder datos, lo hacemos después)
+
+```{r}
+delitos <- na.omit(delitos)
+dim(delitos)
+```
+
+# 3) Aplicación de FDA
+
+
+## Creamos la variable dependiente
+```{r}
+# Agrupar por fecha numérica y contar la frecuencia diaria de delitos
+delitos_por_dia <- delitos %>%
+  group_by(fecha) %>%  # 'fecha' ya es numérica en tu caso
+  summarise(frecuencia_delitos = n())  # Contar los delitos por fecha
+
+# Ver las primeras filas del resultado
+head(delitos_por_dia)
+
+```
+
+## Crear la Base Funcional
+
+```{r}
+# Instalar y cargar el paquete fda si es necesario
+if (!require("fda")) install.packages("fda")
+library(fda)
+
+# Crear la base de B-splines
+range_dias <- range(delitos_por_dia$fecha)  # Rango de días en tu dataset
+n_basis <- 15  # Número de funciones base
+basis <- create.bspline.basis(rangeval = range_dias, nbasis = n_basis)
+
+# Crear el objeto funcional para la frecuencia de delitos
+frecuencia_fd <- Data2fd(
+  argvals = delitos_por_dia$fecha,  # Fechas como variable independiente
+  y = delitos_por_dia$frecuencia_delitos,  # Frecuencia como variable dependiente
+  basisobj = basis
+)
+
+# Graficar la curva funcional
+plot(frecuencia_fd, main = "Frecuencia de Delitos en el Tiempo", xlab = "Fechas", ylab = "Frecuencia de Delitos")
+
+```
+
+## Incorporar Variables Predictoras (Opcional)
+
+```{r}
+# Agrupar las predictoras por fecha
+predictoras_agrupadas <- delitos %>%
+  group_by(fecha) %>%
+  summarise(
+    uso_arma = mean(as.numeric(uso_arma)),  # Promedio del uso de armas por día
+    franja_horaria = mean(as.numeric(franja_horaria))  # Promedio de franja horaria por día
+  )
+
+# Combinar las predictoras agrupadas con frecuencia de delitos
+delitos_agrupados <- delitos_por_dia %>%
+  left_join(predictoras_agrupadas, by = "fecha")
+
+# Verificar el dataset resultante
+head(delitos_agrupados)
+
+```
+
+```{r}
+# Crear objetos funcionales para las variables predictoras
+uso_arma_fd <- Data2fd(
+  argvals = delitos_agrupados$fecha, 
+  y = delitos_agrupados$uso_arma, 
+  basisobj = basis
+)
+
+franja_horaria_fd <- Data2fd(
+  argvals = delitos_agrupados$fecha, 
+  y = delitos_agrupados$franja_horaria, 
+  basisobj = basis
+)
+
+```
+
+
+
+```{r}
+# Ajustar el modelo con pesos constantes
+modelo_fda <- fRegress(frecuencia_fd ~ uso_arma_fd + franja_horaria_fd, wtconst = TRUE)
+
+# Verificar el resultado
+summary(modelo_fda)
+
+```
+
+
+```{r}
+# Graficar la curva observada (frecuencia real) vs. la predicción del modelo
+plot(frecuencia_fd, col = "blue", lwd = 2, main = "Curvas Observadas vs. Predichas")
+lines(modelo_fda$yhatfd, col = "red", lwd = 2)
+legend("topright", legend = c("Observada", "Predicha"), col = c("blue", "red"), lwd = 2)
+
+```
+
+
+
+
 
 
 
