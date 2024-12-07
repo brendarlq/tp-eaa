@@ -156,16 +156,12 @@ dim(delitos)
 
 # 3) Aplicación de FDA
 
-## Creamos la variable dependiente
-
+## Hacemos la agrupación correspondiente por las variables que vamos a usar.
 ```{r}
 # Instalar las librerías necesarias
 if (!require("refund")) install.packages("refund")
-if (!require("dplyr")) install.packages("dplyr")
-
 # Cargar las librerías
 library(refund)
-library(dplyr)
 
 # Preparar el dataset
 # Agrupar por fecha y calcular la frecuencia diaria de delitos
@@ -180,6 +176,11 @@ delitos_agrupados <- delitos %>%
 # Eliminar filas con valores faltantes
 delitos_agrupados <- delitos_agrupados[complete.cases(delitos_agrupados), ]
 
+```
+
+## Creamos la variable indendiente y las matrices correspondientes
+
+```{r}
 # Crear la respuesta (frecuencia de delitos por día)
 Y <- delitos_agrupados$frecuencia_delitos
 
@@ -199,6 +200,11 @@ print(length(Y))  # Longitud de Y
 print(dim(tipo_matrix))  # Dimensiones de tipo_matrix
 print(dim(franja_horaria_matrix))  # Dimensiones de franja_horaria_matrix
 
+```
+
+## Creamos el modelo con tipo de delito
+
+```{r}
 # Ajustar el modelo funcional con 'tipo' como predictora funcional
 modelo_refund_tipo <- pfr(
   Y ~ lf(tipo_matrix, bs = "ps"),  # lf() para predictoras funcionales
@@ -212,6 +218,12 @@ summary(modelo_refund_tipo)
 plot(modelo_refund_tipo, main = "Efecto Funcional de Tipo de Delito", 
      xlab = "Dominio (Puntos Funcionales)", ylab = "Efecto")
 
+
+
+```
+# Creamos el modelo mixto con tipo y franja horaria
+
+```{r}
 # Ajustar un modelo funcional con múltiples predictoras funcionales
 modelo_refund_mixto <- pfr(
   Y ~ lf(tipo_matrix, bs = "ps") + lf(franja_horaria_matrix, bs = "ps"),
@@ -224,6 +236,12 @@ summary(modelo_refund_mixto)
 # Visualizar los efectos funcionales de las predictoras
 plot(modelo_refund_mixto, main = "Efectos Funcionales de las Predictoras", pages = 1)
 
+
+```
+
+
+# Calculamos las métricas de la predicción
+```{r}
 # Generar predicciones del modelo mixto
 # Predicciones del modelo
 predicciones <- predict(modelo_refund_mixto)
@@ -256,110 +274,6 @@ plot(Y, predicciones, main = "Predicciones vs Valores Reales (Modelo Mixto)",
      xlab = "Valores Reales", ylab = "Predicciones", col = "blue")
 abline(0, 1, col = "red")
 
-
-
 ```
 
-## Crear la Base Funcional
 
-```{r}
-# Verificar el tipo de Y
-# Verificar la clase de las matrices
-print(class(uso_arma_matrix))  # Debe ser "matrix"
-print(class(franja_horaria_matrix))  # Debe ser "matrix"
-
-# Verificar valores faltantes
-anyNA(uso_arma_matrix)
-anyNA(franja_horaria_matrix)
-
-```
-
-## Incorporar Variables Predictoras (Opcional)
-
-```{r}
-# Crear una lista de predictoras funcionales
-predictoras_funcionales <- list(
-  uso_arma = uso_arma_fd,
-  franja_horaria = franja_horaria_fd
-)
-
-# Ajustar el modelo funcional
-modelo_funcional <- fregre.basis(
-  y = frecuencia_fd,  # Respuesta funcional
-  x = predictoras_funcionales  # Predictoras funcionales
-)
-
-# Resumen del modelo
-summary(modelo_funcional)
-
-# Predicciones
-predicciones <- predict(modelo_funcional)
-
-# Graficar los resultados
-plot(frecuencia_fd, main = "Frecuencia de Delitos (Curva Real vs Ajustada)")
-lines(predicciones, col = "red", lwd = 2)
-legend("topright", legend = c("Real", "Predicción"), col = c("black", "red"), lty = c(1, 1))
-
-
-
-```
-
-```{r}
-# Crear una base de B-splines
-n_basis <- 15  # Número de funciones base
-base_bspline <- create.bspline.basis(
-  rangeval = range(delitos_por_dia$fecha),
-  nbasis = n_basis
-)
-
-# Convertir el objeto fdata a fd usando la base creada
-frecuencia_fd <- fdata2fd(frecuencia_fdata, type.basis = "bspline", nbasis = n_basis)
-uso_arma_fd <- fdata2fd(uso_arma_fdata, type.basis = "bspline", nbasis = n_basis)
-franja_horaria_fd <- fdata2fd(franja_horaria_fdata, type.basis = "bspline", nbasis = n_basis)
-
-# Verificar el objeto funcional creado
-print(frecuencia_fd)
-
-```
-
-```{r}
-# Crear un listado de predictoras funcionales
-predictoras_funcionales <- list(
-  uso_arma = uso_arma_fd,
-  franja_horaria = franja_horaria_fd
-)
-
-# Ajustar el modelo funcional
-modelo_funcional <- fregre.basis(frecuencia_fd, x = predictoras_funcionales, basis = base_bspline)
-
-# Resumen del modelo
-summary(modelo_funcional)
-
-# Predicciones del modelo
-predicciones <- predict(modelo_funcional)
-
-```
-
-```{r}
-# Agregar predictoras escalares
-predictoras_escalares <- delitos_agrupados[, c("tipo", "subtipo")]  # Ejemplo de predictoras escalares
-
-# Modelo funcional con escalares
-modelo_mixto <- fregre.gsam(
-  y = frecuencia_fd,
-  x = list(fdata = predictoras_funcionales, sc = predictoras_escalares)
-)
-
-# Resumen del modelo mixto
-summary(modelo_mixto)
-
-
-```
-
-```{r}
-# Graficar la curva observada (frecuencia real) vs. la predicción del modelo
-plot(frecuencia_fd, col = "blue", lwd = 2, main = "Curvas Observadas vs. Predichas")
-lines(modelo_fda$yhatfd, col = "red", lwd = 2)
-legend("topright", legend = c("Observada", "Predicha"), col = c("blue", "red"), lwd = 2)
-
-```
