@@ -396,6 +396,8 @@ library(fda)
     # Crear la base de B-splines
     n_basis <- 10  # Ajusta según el nivel de suavidad deseado
     basis <- create.bspline.basis(rangeval = range_horarios, nbasis = n_basis)
+    
+plot(basis,xlab="horarios",ylab="valor base",main="Base B-Spline con 10 nodos",col=1:10 )
 
 ```
 
