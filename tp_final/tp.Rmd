@@ -25,7 +25,7 @@ library(dplyr)
 
 ```{r}
 library(openxlsx)
-delitos <- read.xlsx("/Users/bquinonez/Downloads/delitos_2023.xlsx")
+delitos <- read.xlsx("/Users/maria/Downloads/delitos_2023.xlsx")
 delitos
 ```
 
@@ -113,27 +113,57 @@ delitos
 
 ## Transformación de variables categóricas
 
-Transformamos todos los caracteres a numéricos
+Transformamos todos los caracteres a numéricos, arreglo para no sobreescribir, exceptuando moto,arma,lat,long
 
 ```{r}
+library(dplyr)
 
-# Convertir todas las variables categóricas (character o factor) a numéricas
-delitos <- delitos %>%
+# Convertir columnas específicas `uso_arma` y `uso_moto` (Sí=1, No=0)
+del <- delitos %>%
+  mutate(
+    uso_arma = ifelse(uso_arma == "SI", 1, 0),
+    uso_moto = ifelse(uso_moto == "SI", 1, 0)
+  )
+
+# Convertir otras columnas categóricas a nuevas columnas codificadas
+del <- del %>%
   mutate(across(
-    .cols = where(is.character) & !all_of(c("longitud", "latitud")), 
-    .fns = ~ as.numeric(as.factor(.))
+    .cols = where(is.character) & !all_of(c("longitud", "latitud", "uso_arma", "uso_moto")), 
+    .fns = ~ as.numeric(as.factor(.)),
+    .names = "{.col}_cod"
   )) %>%
   mutate(across(
-    .cols = where(is.factor) & !all_of(c("longitud", "latitud")), 
-    .fns = ~ as.numeric(.)
+    .cols = where(is.factor) & !all_of(c("longitud", "latitud", "uso_arma", "uso_moto")), 
+    .fns = ~ as.numeric(.),
+    .names = "{.col}_cod"
   ))
 
-# Verificar la estructura después de la conversión
-delitos
+# Verificar la estructura del dataset después de las transformaciones
+str(delitos)
 
 ```
 
-Conversión de coordenas a númericas
+
+```{r}
+
+# # Convertir todas las variables categóricas (character o factor) a numéricas
+# delitos <- delitos %>%
+#   mutate(across(
+#     .cols = where(is.character) & !all_of(c("longitud", "latitud")), 
+#     .fns = ~ as.numeric(as.factor(.))
+#   )) %>%
+#   mutate(across(
+#     .cols = where(is.factor) & !all_of(c("longitud", "latitud")), 
+#     .fns = ~ as.numeric(.)
+#   ))
+# 
+# # Verificar la estructura después de la conversión
+# delitos
+# 
+```
+
+
+##Conversión de coordenas a númericas
 
 ```{r}
 # Convertir longitud y latitud a numéricas y escalarlas correctamente
@@ -182,41 +212,41 @@ delitos_agrupados <- delitos_agrupados[complete.cases(delitos_agrupados), ]
 
 ```{r}
 # Crear la respuesta (frecuencia de delitos por día)
-Y <- delitos_agrupados$frecuencia_delitos
-
-# Crear una matriz funcional para 'tipo'
-n_puntos <- 10  # Número de puntos funcionales
-tipo_matrix <- matrix(rep(delitos_agrupados$tipo_promedio, each = n_puntos), 
-                      nrow = nrow(delitos_agrupados), 
-                      ncol = n_puntos)
-
-# Crear una matriz funcional para 'franja_horaria'
-franja_horaria_matrix <- matrix(rep(delitos_agrupados$franja_horaria_promedio, each = n_puntos), 
-                                nrow = nrow(delitos_agrupados), 
-                                ncol = n_puntos)
-
-# Verificar dimensiones
-print(length(Y))  # Longitud de Y
-print(dim(tipo_matrix))  # Dimensiones de tipo_matrix
-print(dim(franja_horaria_matrix))  # Dimensiones de franja_horaria_matrix
+# Y <- delitos_agrupados$frecuencia_delitos
+# 
+# # Crear una matriz funcional para 'tipo'
+# n_puntos <- 10  # Número de puntos funcionales
+# tipo_matrix <- matrix(rep(delitos_agrupados$tipo_promedio, each = n_puntos), 
+#                       nrow = nrow(delitos_agrupados), 
+#                       ncol = n_puntos)
+# 
+# # Crear una matriz funcional para 'franja_horaria'
+# franja_horaria_matrix <- matrix(rep(delitos_agrupados$franja_horaria_promedio, each = n_puntos), 
+#                                 nrow = nrow(delitos_agrupados), 
+#                                 ncol = n_puntos)
+# 
+# # Verificar dimensiones
+# print(length(Y))  # Longitud de Y
+# print(dim(tipo_matrix))  # Dimensiones de tipo_matrix
+# print(dim(franja_horaria_matrix))  # Dimensiones de franja_horaria_matrix
 
 ```
 
 ## Creamos el modelo con tipo de delito
 
 ```{r}
-# Ajustar el modelo funcional con 'tipo' como predictora funcional
-modelo_refund_tipo <- pfr(
-  Y ~ lf(tipo_matrix, bs = "ps"),  # lf() para predictoras funcionales
-  data = delitos_agrupados
-)
-
-# Resumen del modelo
-summary(modelo_refund_tipo)
-
-# Visualizar el efecto funcional
-plot(modelo_refund_tipo, main = "Efecto Funcional de Tipo de Delito", 
-     xlab = "Dominio (Puntos Funcionales)", ylab = "Efecto")
+# # Ajustar el modelo funcional con 'tipo' como predictora funcional
+# modelo_refund_tipo <- pfr(
+#   Y ~ lf(tipo_matrix, bs = "ps"),  # lf() para predictoras funcionales
+#   data = delitos_agrupados
+# )
+# 
+# # Resumen del modelo
+# summary(modelo_refund_tipo)
+# 
+# # Visualizar el efecto funcional
+# plot(modelo_refund_tipo, main = "Efecto Funcional de Tipo de Delito", 
+#      xlab = "Dominio (Puntos Funcionales)", ylab = "Efecto")
 
 
 
@@ -224,17 +254,17 @@ plot(modelo_refund_tipo, main = "Efecto Funcional de Tipo de Delito",
 # Creamos el modelo mixto con tipo y franja horaria
 
 ```{r}
-# Ajustar un modelo funcional con múltiples predictoras funcionales
-modelo_refund_mixto <- pfr(
-  Y ~ lf(tipo_matrix, bs = "ps") + lf(franja_horaria_matrix, bs = "ps"),
-  data = delitos_agrupados
-)
-
-# Resumen del modelo mixto
-summary(modelo_refund_mixto)
-
-# Visualizar los efectos funcionales de las predictoras
-plot(modelo_refund_mixto, main = "Efectos Funcionales de las Predictoras", pages = 1)
+# # Ajustar un modelo funcional con múltiples predictoras funcionales
+# modelo_refund_mixto <- pfr(
+#   Y ~ lf(tipo_matrix, bs = "ps") + lf(franja_horaria_matrix, bs = "ps"),
+#   data = delitos_agrupados
+# )
+# 
+# # Resumen del modelo mixto
+# summary(modelo_refund_mixto)
+# 
+# # Visualizar los efectos funcionales de las predictoras
+# plot(modelo_refund_mixto, main = "Efectos Funcionales de las Predictoras", pages = 1)
 
 
 ```
@@ -242,38 +272,370 @@ plot(modelo_refund_mixto, main = "Efectos Funcionales de las Predictoras", pages
 
 # Calculamos las métricas de la predicción
 ```{r}
-# Generar predicciones del modelo mixto
-# Predicciones del modelo
-predicciones <- predict(modelo_refund_mixto)
+# # Generar predicciones del modelo mixto
+# # Predicciones del modelo
+# predicciones <- predict(modelo_refund_mixto)
+# 
+# # Valores reales (frecuencia de delitos)
+# valores_reales <- Y
+# 
+# # Calcular MAE
+# mae <- mean(abs(valores_reales - predicciones))
+# 
+# # Calcular MSE
+# mse <- mean((valores_reales - predicciones)^2)
+# 
+# # Calcular RMSE
+# rmse <- sqrt(mse)
+# 
+# # Calcular R^2
+# sse <- sum((valores_reales - predicciones)^2)  # Suma de errores al cuadrado
+# sst <- sum((valores_reales - mean(valores_reales))^2)  # Suma total de cuadrados
+# r2 <- 1 - (sse / sst)
+# 
+# # Mostrar las métricas
+# cat("MAE:", mae, "\n")
+# cat("MSE:", mse, "\n")
+# cat("RMSE:", rmse, "\n")
+# cat("R^2:", r2, "\n")
+# 
+# # Graficar predicciones vs valores reales
+# plot(Y, predicciones, main = "Predicciones vs Valores Reales (Modelo Mixto)",
+#      xlab = "Valores Reales", ylab = "Predicciones", col = "blue")
+# abline(0, 1, col = "red")
 
-# Valores reales (frecuencia de delitos)
-valores_reales <- Y
+```
+```{r}
+library(dplyr)
 
-# Calcular MAE
-mae <- mean(abs(valores_reales - predicciones))
+# Agrupar por fecha y calcular la frecuencia diaria de delitos
+frecuencia_delitos_por_dia <- delitos %>%
+  group_by(fecha) %>%  # Agrupar por fecha
+  summarise(frecuencia = n())  # Contar los delitos
 
-# Calcular MSE
-mse <- mean((valores_reales - predicciones)^2)
-
-# Calcular RMSE
-rmse <- sqrt(mse)
-
-# Calcular R^2
-sse <- sum((valores_reales - predicciones)^2)  # Suma de errores al cuadrado
-sst <- sum((valores_reales - mean(valores_reales))^2)  # Suma total de cuadrados
-r2 <- 1 - (sse / sst)
-
-# Mostrar las métricas
-cat("MAE:", mae, "\n")
-cat("MSE:", mse, "\n")
-cat("RMSE:", rmse, "\n")
-cat("R^2:", r2, "\n")
-
-# Graficar predicciones vs valores reales
-plot(Y, predicciones, main = "Predicciones vs Valores Reales (Modelo Mixto)",
-     xlab = "Valores Reales", ylab = "Predicciones", col = "blue")
-abline(0, 1, col = "red")
+# Asegúrate de que las fechas estén en formato Date
+frecuencia_delitos_por_dia$fecha <- as.Date(frecuencia_delitos_por_dia$fecha, origin = "1899-12-30")
 
 ```
 
+
+```{r}
+library(fda)
+
+# Definir el rango de las fechas
+range_dias <- c(min(frecuencia_delitos_por_dia$fecha), max(frecuencia_delitos_por_dia$fecha))
+
+# Crear la base de B-splines
+n_basis <- 15  # Número de funciones base
+basis <- create.bspline.basis(rangeval = as.numeric(range_dias), nbasis = n_basis)
+
+
+```
+
+```{r}
+# Convertir las fechas a formato numérico
+fechas_numericas <- as.numeric(frecuencia_delitos_por_dia$fecha)
+
+# Crear el objeto funcional
+frecuencia_fd <- Data2fd(
+  argvals = fechas_numericas,  # Fechas como variable independiente
+  y = frecuencia_delitos_por_dia$frecuencia,  # Frecuencia como variable dependiente
+  basisobj = basis
+)
+
+```
+
+```{r}
+# Graficar la curva funcional
+plot(frecuencia_fd, 
+     main = "Frecuencia de Delitos a lo Largo del Tiempo", 
+     xlab = "Fechas", 
+     ylab = "Frecuencia de Delitos")
+
+# Personalizar las etiquetas del eje X para mostrar fechas legibles
+fechas_legibles <- frecuencia_delitos_por_dia$fecha
+axis(1, at = as.numeric(fechas_legibles), labels = format(fechas_legibles, "%Y-%m-%d"), las = 2, cex.axis = 0.7)
+
+```
+
+```{r}
+library(dplyr)
+
+# Agrupar por día y horario, y contar la frecuencia de delitos
+delitos_por_dia_horario <- delitos %>%
+  group_by(franja, fecha) %>%  # 'franja_horaria' representa los horarios
+  summarise(frecuencia = n(), .groups = "drop")
+
+# Asegúrate de que las fechas estén en formato Date
+delitos_por_dia_horario$fecha <- as.Date(delitos_por_dia_horario$fecha, origin = "1899-12-30")
+summary(delitos_por_dia_horario)
+```
+
+```{r}
+if (!require("tibble")) install.packages("tibble")
+library(tibble)
+# Crear una matriz con filas como días y columnas como franjas horarias
+matriz_frecuencia <- delitos_por_dia_horario %>%
+  pivot_wider(names_from = franja, values_from = frecuencia, values_fill = 0) %>%
+  column_to_rownames(var = "fecha") %>%
+  as.matrix()
+
+# Dimensiones de la matriz
+print(dim(matriz_frecuencia))
+
+
+
+```
+
+```{r}
+library(fda)
+  
+  # Rango de horarios (e.g., de 0 a 23 si es en horas)
+  range_horarios <- range(as.numeric(colnames(matriz_frecuencia)))
+    
+    # Crear la base de B-splines
+    n_basis <- 10  # Ajusta según el nivel de suavidad deseado
+    basis <- create.bspline.basis(rangeval = range_horarios, nbasis = n_basis)
+
+```
+
+```{r}
+# Crear el objeto funcional
+frecuencia_fd <- Data2fd(
+  argvals = as.numeric(colnames(matriz_frecuencia)),  # Franjas horarias como variable independiente
+  y = t(matriz_frecuencia),  # Transponer la matriz para que las filas sean funciones
+  basisobj = basis
+)
+
+
+
+```
+
+```{r}
+# Graficar todas las curvas funcionales
+plot(frecuencia_fd, 
+     main = "Frecuencia de Delitos por Horario y Día", 
+     xlab = "Horario", 
+     ylab = "Frecuencia de Delitos", 
+     col = rainbow(nrow(matriz_frecuencia)))  # Curvas en diferentes colores
+
+# Agregar una leyenda opcional
+legend("topright", legend = rownames(matriz_frecuencia), col = rainbow(nrow(matriz_frecuencia)), lty = 1, cex = 0.5)
+
+```
+```{r}
+
+# Transponer la matriz: las filas serán las franjas horarias y las columnas las fechas
+matriz_frecuencia_transpuesta <- t(matriz_frecuencia)
+
+```
+
+```{r}
+
+library(fda)
+
+
+
+# Asegurarte de que las franjas horarias son columnas
+matriz_frecuencia_transpuesta <- t(matriz_frecuencia_transpuesta)  # Ahora será 365 x 24
+
+# Verificar dimensiones
+dim(matriz_frecuencia_transpuesta)  # Debe ser 365 x 24
+length(fechas)  # Debe ser 365
+
+# Crear la base de B-splines
+range_fechas <- range(fechas)  # Rango de fechas
+n_basis <- 15  # Ajusta la cantidad de bases según la suavidad deseada
+basis <- create.bspline.basis(rangeval = range_fechas, nbasis = n_basis)
+
+# Crear el objeto funcional
+frecuencia_fd <- Data2fd(
+  argvals = fechas,  # Fechas como eje X
+  y = matriz_frecuencia_transpuesta,  # Franjas horarias como columnas
+  basisobj = basis
+)
+
+# Verificar el objeto funcional
+print(frecuencia_fd)
+
+
+```
+
+```{r}
+
+plot(frecuencia_fd, 
+     main = "Frecuencia de delitos por franja horaria", 
+     xlab = "Fecha", 
+     ylab = "Frecuencia", 
+     col = rainbow(24))  # Colores para las 24 franjas horarias
+
+# Agregar leyenda para identificar cada franja horaria
+legend("topright", legend = paste0("Franja ", 0:23), col = rainbow(24), lty = 1, cex = 0.7)
+
+
+```
+
+
+
+
+```{r}
+install.packages("RColorBrewer")
+library(RColorBrewer)
+
+# Crear el gráfico con dimensiones ampliadas
+png("grafico_mejorado_legenda.png", width = 2000, height = 1200, res = 150)  # Resolución más alta
+
+# Ajustar márgenes: más espacio derecho para la leyenda
+par(mar = c(10, 4, 4, 35) + 0.1)  # Aumentar margen derecho para que la leyenda no quede cortada
+
+# Crear el gráfico principal
+plot(frecuencia_fd,
+     main = "Frecuencia de delitos por franja horaria",
+     xlab = "Fecha",
+     ylab = "Frecuencia",
+     xaxt = "n",  # Personalizamos el eje X
+     col = c(brewer.pal(12, "Set3"), brewer.pal(12, "Paired")),
+     lwd = 2)  # Grosor de las líneas
+
+# Espaciado de las fechas en el eje X
+fechas_etiquetas <- seq(min(fechas_date), max(fechas_date), by = "2 weeks")  # Mostrar cada dos semanas
+axis(1,
+     at = as.numeric(fechas_etiquetas),  # Espaciado personalizado
+     labels = format(fechas_etiquetas, "%d %b"),  # Día y mes
+     las = 2,  # Rotar las etiquetas
+     cex.axis = 0.8)  # Tamaño del texto en el eje X
+
+# Crear una leyenda más amplia fuera del área del gráfico
+legend("topright",
+       inset = c(-0.7, 0),  # Más espacio hacia la derecha
+       legend = paste0("Franja ", 0:23),
+       col = c(brewer.pal(12, "Set3"), brewer.pal(12, "Paired")),
+       lty = 1,
+       lwd = 2,  # Grosor de las líneas
+       ncol = 2,  # Dividir la leyenda en dos columnas
+       cex = 1.2,  # Tamaño del texto más grande
+       xpd = TRUE)  # Permitir que la leyenda esté fuera del área de dibujo
+
+# Guardar y cerrar el archivo PNG
+dev.off()
+
+# Verificar que el archivo fue creado
+browseURL("grafico_mejorado_legenda.png")
+
+```
+
+
+
+##Comparo sin fda
+```{r}
+# Asegurarte de que tienes las librerías necesarias
+library(ggplot2)
+
+# Convertir los datos en formato largo para ggplot
+datos_crudos <- as.data.frame(matriz_frecuencia)
+datos_crudos$Fecha <- fechas_date  # Agregar fechas como columna
+datos_largos <- tidyr::pivot_longer(
+  datos_crudos,
+  cols = -Fecha,
+  names_to = "Franja_Horaria",
+  values_to = "Frecuencia"
+)
+
+# Generar el gráfico crudo
+grafico_crudo <- ggplot(datos_largos, aes(x = Fecha, y = Frecuencia, color = Franja_Horaria)) +
+  geom_line(alpha = 0.8, size = 0.5) +  # Líneas más delgadas
+  scale_color_manual(values = scales::hue_pal()(24)) +  # 24 colores bien diferenciados
+  labs(
+    title = "Frecuencia de delitos por franja horaria (Datos crudos)",
+    x = "Fecha",
+    y = "Frecuencia",
+    color = "Franja Horaria"
+  ) +
+  theme_minimal(base_size = 14) +  # Tema minimalista
+  theme(
+    legend.position = "right",
+    legend.text = element_text(size = 10),
+    axis.text.x = element_text(angle = 45, hjust = 1)  # Rotar etiquetas del eje X
+  )
+
+# Mostrar el gráfico
+print(grafico_crudo)
+
+
+```
+
+##Grafico comparativo entre fda y sin fda
+
+```{r}
+# Librerías necesarias
+library(ggplot2)
+library(grid)
+library(gridExtra)
+
+# Crear el gráfico sin FDA
+png("grafico_sin_fda_separado.png", width = 1600, height = 900, res = 150)
+ggplot(datos_largos, aes(x = Fecha, y = Frecuencia, color = Franja_Horaria)) +
+  geom_line(alpha = 0.8, size = 0.5) +
+  scale_color_manual(values = scales::hue_pal()(24)) +
+  labs(
+    title = "Frecuencia de delitos por franja horaria (Sin FDA)",
+    x = "Fecha",
+    y = "Frecuencia",
+    color = "Franja Horaria"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "right",
+    legend.text = element_text(size = 8),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+dev.off()
+
+# Crear el gráfico con FDA
+png("grafico_con_fda_separado.png", width = 1600, height = 900, res = 150)
+par(mar = c(10, 4, 4, 35) + 0.1)  # Ajustar márgenes
+plot(frecuencia_fd,
+     main = "Frecuencia de delitos por franja horaria (Con FDA)",
+     xlab = "Fecha",
+     ylab = "Frecuencia",
+     xaxt = "n",
+     col = c(brewer.pal(12, "Set3"), brewer.pal(12, "Paired")),
+     lwd = 2)  # Grosor de las líneas
+fechas_etiquetas <- seq(min(fechas_date), max(fechas_date), by = "1 month")
+axis(1,
+     at = as.numeric(fechas_etiquetas),
+     labels = format(fechas_etiquetas, "%b %Y"),
+     las = 2,
+     cex.axis = 0.8)
+legend("topright",
+       inset = c(-0.5, 0),
+       legend = paste0("Franja ", 0:23),
+       col = c(brewer.pal(12, "Set3"), brewer.pal(12, "Paired")),
+       lty = 1,
+       lwd = 2,
+       ncol = 2,
+       cex = 0.8,
+       xpd = TRUE)
+dev.off()
+
+# Cargar ambas imágenes y combinarlas
+grafico_sin_fda <- rasterGrob(readPNG("grafico_sin_fda_separado.png"), interpolate = TRUE)
+grafico_con_fda <- rasterGrob(readPNG("grafico_con_fda_separado.png"), interpolate = TRUE)
+
+# Guardar gráfico combinado
+png("comparacion_graficos_final.png", width = 3200, height = 900, res = 150)
+grid.arrange(
+  gridExtra::arrangeGrob(grafico_con_fda, top = "Con FDA"),
+  gridExtra::arrangeGrob(grafico_sin_fda, top = "Sin FDA"),
+  ncol = 2
+)
+dev.off()
+
+# Mostrar el archivo final
+browseURL("comparacion_graficos_final.png")
+
+
+
+
+```
 
