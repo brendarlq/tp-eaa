@@ -299,6 +299,13 @@ str(delitos)
 
 ```
 
+```{r}
+
+
+
+```
+
+
 
 ```{r}
 
@@ -485,7 +492,7 @@ library(fda)
 range_dias <- c(min(frecuencia_delitos_por_dia$fecha), max(frecuencia_delitos_por_dia$fecha))
 
 # Crear la base de B-splines
-n_basis <- 15  # Número de funciones base
+n_basis <- 25  # Número de funciones base
 basis <- create.bspline.basis(rangeval = as.numeric(range_dias), nbasis = n_basis)
 
 
@@ -553,10 +560,10 @@ library(fda)
   range_horarios <- range(as.numeric(colnames(matriz_frecuencia)))
     
     # Crear la base de B-splines
-    n_basis <- 10  # Ajusta según el nivel de suavidad deseado
+    n_basis <- 25  # Ajusta según el nivel de suavidad deseado
     basis <- create.bspline.basis(rangeval = range_horarios, nbasis = n_basis)
     
-plot(basis,xlab="horarios",ylab="valor base",main="Base B-Spline con 10 nodos",col=1:10 )
+plot(basis,xlab="horarios",ylab="valor base",main="Base B-Spline con 15 nodos",col=1:10 )
 
 ```
 
@@ -606,7 +613,7 @@ length(fechas)  # Debe ser 365
 
 # Crear la base de B-splines
 range_fechas <- range(fechas)  # Rango de fechas
-n_basis <- 15  # Ajusta la cantidad de bases según la suavidad deseada
+n_basis <- 25  # Ajusta la cantidad de bases según la suavidad deseada
 basis <- create.bspline.basis(rangeval = range_fechas, nbasis = n_basis)
 
 # Crear el objeto funcional
@@ -618,7 +625,7 @@ frecuencia_fd <- Data2fd(
 
 # Verificar el objeto funcional
 print(frecuencia_fd)
-
+summary(frecuencia_fd)
 
 ```
 
@@ -796,6 +803,16 @@ dev.off()
 browseURL("comparacion_graficos_final.png")
 
 
+
+
+```
+
+```{r}
+# Calcular la derivada del objeto funcional frecuencia_fd
+frecuencia_fd_deriv <- fdata.deriv(frecuencia_fd)
+
+# Visualizar la derivada
+plot(frecuencia_fd_deriv, main = "Derivada de la Frecuencia de Delitos")
 
 
 ```
