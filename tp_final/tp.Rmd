@@ -209,31 +209,10 @@ grafico_horas <- ggplot(delitos_por_hora, aes(x = franja, y = total)) +
 print(grafico_horas)
 
 ```
-```{r}
-library(randomForest)
 
-# Convertir las variables categóricas en factores
-# Eliminar columnas irrelevantes como id-sum
-delitos_limpio <- delitos %>%
-  select(-`id-sum`)  # Asegúrate de que esta variable no está en el modelo
-
-
-# Convertir variables categóricas a factores y verificar
-delitos_limpio <- delitos_limpio %>%
-  mutate(across(where(is.character), as.factor))
-
-str(delitos_limpio)  # Verificar la estructura
-
-# Entrenar el modelo Random Forest
-modelo_rf <- randomForest(tipo ~ ., data = delitos_limpio, importance = TRUE)
-
-# Importancia de las variables
-importance(modelo_rf)
-varImpPlot(modelo_rf)
 
           
 
-```
 
 
 
@@ -368,23 +347,23 @@ dim(delitos)
 
 ## Hacemos la agrupación correspondiente por las variables que vamos a usar.
 ```{r}
-# Instalar las librerías necesarias
-if (!require("refund")) install.packages("refund")
-# Cargar las librerías
-library(refund)
-
-# Preparar el dataset
-# Agrupar por fecha y calcular la frecuencia diaria de delitos
-delitos_agrupados <- delitos %>%
-  group_by(fecha) %>%
-  summarise(
-    frecuencia_delitos = sum(cantidad),  # Nueva variable respuesta
-    tipo_promedio = mean(tipo, na.rm = TRUE),  # Promedio de tipo por día
-    franja_horaria_promedio = mean(franja_horaria, na.rm = TRUE)  # Promedio de franja horaria
-  )
-
-# Eliminar filas con valores faltantes
-delitos_agrupados <- delitos_agrupados[complete.cases(delitos_agrupados), ]
+# # Instalar las librerías necesarias
+# if (!require("refund")) install.packages("refund")
+# # Cargar las librerías
+# library(refund)
+# 
+# # Preparar el dataset
+# # Agrupar por fecha y calcular la frecuencia diaria de delitos
+# delitos_agrupados <- delitos %>%
+#   group_by(fecha) %>%
+#   summarise(
+#     frecuencia_delitos = sum(cantidad),  # Nueva variable respuesta
+#     tipo_promedio = mean(tipo, na.rm = TRUE),  # Promedio de tipo por día
+#     franja_horaria_promedio = mean(franja_horaria, na.rm = TRUE)  # Promedio de franja horaria
+#   )
+# 
+# # Eliminar filas con valores faltantes
+# delitos_agrupados <- delitos_agrupados[complete.cases(delitos_agrupados), ]
 
 ```
 
