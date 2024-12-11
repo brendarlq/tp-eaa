@@ -106,43 +106,7 @@ delitos_agrupados
 
 ```
 
-```{r}
-library(ggplot2)
-library(dplyr)
 
-# Agrupar los datos por franja horaria, tipo y subtipo
-delitos_agrupados_horario <- delitos %>%
-  group_by(franja_horaria, tipo, subtipo) %>%
-  summarise(total = n(), .groups = "drop") %>%
-  mutate(
-    subtipo = factor(subtipo, levels = unique(subtipo))  # Mantener el orden original
-  )
-
-# Crear el gráfico apilado por franja horaria
-grafico_horarios <- ggplot(delitos_agrupados_horario, aes(x = franja_horaria, y = total, fill = subtipo)) +
-  geom_bar(stat = "identity", position = "stack") +
-  facet_wrap(~ tipo, scales = "free_y") +  # Dividir por tipo de delito
-  labs(
-    title = "Distribución de Subtipos de Delitos por Tipo y Franja Horaria",
-    x = "Franja Horaria",
-    y = "Número de Delitos",
-    fill = "Subtipo de Delito"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "bottom",
-    strip.text = element_text(size = 12),  # Tamaño del título de cada faceta
-    plot.title = element_text(hjust = 0.5),  # Centrar el título
-    legend.text = element_text(size = 10),  # Ajustar tamaño de texto de la leyenda
-    legend.key.size = unit(0.8, "cm")  # Tamaño de las cajas de la leyenda
-  ) +
-  scale_fill_brewer(palette = "Set3")  # Paleta de colores diferenciados
-
-# Mostrar el gráfico
-print(grafico_horarios)
-
-```
 ```{r}
 library(ggplot2)
 library(dplyr)
@@ -299,31 +263,7 @@ str(delitos)
 
 ```
 
-```{r}
 
-
-
-```
-
-
-
-```{r}
-
-# # Convertir todas las variables categóricas (character o factor) a numéricas
-# delitos <- delitos %>%
-#   mutate(across(
-#     .cols = where(is.character) & !all_of(c("longitud", "latitud")), 
-#     .fns = ~ as.numeric(as.factor(.))
-#   )) %>%
-#   mutate(across(
-#     .cols = where(is.factor) & !all_of(c("longitud", "latitud")), 
-#     .fns = ~ as.numeric(.)
-#   ))
-# 
-# # Verificar la estructura después de la conversión
-# delitos
-# 
-```
 
 
 ##Conversión de coordenas a númericas
@@ -339,7 +279,45 @@ delitos <- delitos %>%
 # Verificar las primeras filas para confirmar
 head(delitos[c("longitud", "latitud")])
 ```
+```{r}
+library(ggplot2)
+library(dplyr)
 
+# Agrupación por año, mes y tipo de delito
+delitos_temporal <- del %>%
+  group_by(anio, mes_cod, tipo) %>%
+  summarise(total_delitos = n(), .groups = "drop")
+
+# Visualización de la evolución
+ggplot(delitos_temporal, aes(x = mes_cod, y = total_delitos, color = tipo, group = tipo)) +
+  geom_line(size = 1) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  labs(title = "Evolución Temporal de Delitos por Tipo",
+       x = "Mes",
+       y = "Número de Delitos",
+       color = "Tipo de Delito") +
+  theme_minimal()
+
+```
+
+```{r}
+delitos_temporal_h <- del %>%
+  group_by(franja, tipo) %>%
+  summarise(total_delitos = n(), .groups = "drop")
+
+delitos_temporal_h$franja <- as.character(delitos_temporal_h$franja)
+
+
+ggplot(delitos_temporal_h, aes(x = franja, y = total_delitos, color = tipo, group = tipo)) +
+  geom_line(size = 1) +
+  labs(title = "Evolución Temporal de Delitos por Tipo",
+       x = "Franja Horaria",
+       y = "Número de Delitos",
+       color = "Tipo de Delito") +
+  theme_minimal()
+
+
+```
 
 
 
@@ -349,128 +327,203 @@ Eliminación de Nulos (Pero tiene que ser transformación de nulos para no perde
 delitos <- na.omit(delitos)
 dim(delitos)
 ```
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Agrupar los datos por barrio y tipo de delito
+delitos_por_barrio <- delitos %>%
+  group_by(barrio, tipo) %>%
+  summarise(total = n(), .groups = "drop") %>%
+  group_by(barrio) %>%
+  mutate(total_barrio = sum(total)) %>%
+  ungroup() %>%
+  mutate(barrio = reorder(barrio, -total_barrio))
+
+# Filtrar los 15 barrios con más delitos
+top_barrios <- delitos_por_barrio %>%
+  filter(barrio %in% unique(barrio)[1:15])
+
+# Crear el gráfico de barras apiladas
+ggplot(top_barrios, aes(x = barrio, y = total, fill = tipo)) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(
+    title = "Frecuencia de Delitos por Barrio y Tipo (Top 15)",
+    x = "Barrio",
+    y = "Número de Delitos",
+    fill = "Tipo de Delito"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),  # Rotar etiquetas a 90 grados
+    plot.title = element_text(hjust = 0.5)  # Centrar el título
+  )
+
+# Guardar el gráfico con dimensiones mayores
+ggsave("grafico_delitos_barrio.png", width = 12, height = 8, dpi = 300)
+
+
+```
+## Dia de semana vs Finde
+```{r}
+# Agrupar los datos por día de la semana
+delitos_por_dia <- delitos %>%
+  group_by(tipo_dia) %>%
+  summarise(total = n(), .groups = "drop")
+
+# Crear el gráfico de barras
+ggplot(delitos_por_dia, aes(x = tipo_dia, y = total, fill = tipo_dia)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  labs(
+    title = "Frecuencia de Delitos por Día de la Semana",
+    x = "Día de la Semana",
+    y = "Número de Delitos"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),  # Centrar el título
+    axis.text.x = element_text(angle = 45, hjust = 1)  # Rotar etiquetas si es necesario
+  ) +
+  scale_fill_brewer(palette = "Set3")  # Paleta de colores
+
+
+```
+
+```{r}
+# Agrupar los datos por estación
+delitos_por_estacion <- delitos %>%
+  group_by(estacion) %>%
+  summarise(total = n(), .groups = "drop")
+
+# Crear el gráfico de barras
+ggplot(delitos_por_estacion, aes(x = estacion, y = total, fill = estacion)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Frecuencia de Delitos por Estación del Año",
+    x = "Estación",
+    y = "Número de Delitos"
+  ) +
+  theme_minimal()
+
+```
+
+No hay casos de moto,y uso de arma
+```{r}
+unique(delitos$uso_arma)
+unique(delitos$uso_moto)
+
+```
+```{r}
+# Instalar y cargar paquetes necesarios
+if (!require("corrplot")) install.packages("corrplot")
+if (!require("dplyr")) install.packages("dplyr")
+
+library(corrplot)
+library(dplyr)
+
+# Seleccionar columnas numéricas y excluir 'id_sum' y 'comuna_cod'
+datos_numericos <- del %>%
+  select_if(is.numeric) %>%
+  select( -comuna_cod)
+
+# Verificar las columnas seleccionadas
+print(names(datos_numericos))
+
+# Calcular la matriz de correlación
+matriz_correlacion <- cor(datos_numericos, use = "complete.obs")
+
+# Graficar el corrplot
+corrplot(matriz_correlacion, method = "color", type = "upper",
+         title = "Mapa de Correlación (Excluyendo id_sum y comuna_cod)", 
+         tl.col = "black", tl.srt = 45, addCoef.col = "black", number.cex = 0.7)
+
+
+```
+el corrplot no funciona bien en variables categóricas codificadas
+
+```{r}
+if (!require("GGally")) install.packages("GGally")
+library(GGally)
+
+# Seleccionar un subconjunto de variables (numéricas y categóricas)
+variables_seleccionadas <- del %>%
+  select(anio, tipo, estacion, franja,mes)
+
+# Graficar el scatterplot matrix para variables mixtas
+ggpairs(variables_seleccionadas, title = "Análisis Mixto de Variables")
+
+
+```
+```{r}
+# Función para calcular correlaciones mixtas
+calcular_correlacion <- function(x, y) {
+  if (is.numeric(x) && is.numeric(y)) {
+    return(cor(x, y, use = "complete.obs"))  # Pearson para numéricas
+  } else if (is.factor(x) && is.factor(y)) {
+    return(CramerV(x, y))  # Cramér V para categóricas
+  } else if (is.factor(x) && is.numeric(y)) {
+    return(sqrt(summary(aov(y ~ x))[[1]][["Sum Sq"]][1] / sum(summary(aov(y ~ x))[[1]][["Sum Sq"]])))  # Eta cuadrado
+  } else if (is.numeric(x) && is.factor(y)) {
+    return(sqrt(summary(aov(x ~ y))[[1]][["Sum Sq"]][1] / sum(summary(aov(x ~ y))[[1]][["Sum Sq"]])))  # Eta cuadrado
+  } else {
+    return(NA)
+  }
+}
+
+# Crear una matriz para variables mixtas
+variables <- del  # Usar el dataset completo
+n <- ncol(variables)
+matriz_mixta <- matrix(NA, nrow = n, ncol = n,
+                       dimnames = list(names(variables), names(variables)))
+
+# Calcular correlaciones mixtas
+for (i in 1:n) {
+  for (j in i:n) {
+    matriz_mixta[i, j] <- calcular_correlacion(variables[[i]], variables[[j]])
+    matriz_mixta[j, i] <- matriz_mixta[i, j]  # Matriz simétrica
+  }
+}
+
+# Graficar la matriz mixta
+library(corrplot)
+corrplot(as.matrix(matriz_mixta), is.corr = FALSE, method = "color", tl.cex = 0.8,
+         title = "Matriz de Correlaciones Mixtas", mar = c(0, 0, 2, 0))
+
+```
+```{r}
+# Instalar y cargar el paquete necesario
+if (!require("DescTools")) install.packages("DescTools")
+library(DescTools)
+
+# Seleccionar solo variables categóricas
+variables_categoricas <- del %>%
+  select_if(is.factor)  # Filtrar columnas categóricas (factores)
+
+# Crear una matriz vacía para almacenar los coeficientes
+n <- ncol(variables_categoricas)
+matriz_cramer <- matrix(NA, nrow = n, ncol = n,
+                        dimnames = list(names(variables_categoricas), names(variables_categoricas)))
+
+# Calcular Cramér V para cada combinación de variables categóricas
+for (i in 1:n) {
+  for (j in i:n) {
+    matriz_cramer[i, j] <- CramerV(variables_categoricas[[i]], variables_categoricas[[j]])
+    matriz_cramer[j, i] <- matriz_cramer[i, j]  # Matriz simétrica
+  }
+}
+
+# Convertir a data.frame para graficar
+library(corrplot)
+corrplot(as.matrix(matriz_cramer), is.corr = FALSE, method = "color", tl.cex = 0.8,
+         title = "Matriz de Asociación - Cramér V", mar = c(0, 0, 2, 0))
+
+
+```
+
 
 # 3) Aplicación de FDA
 
-## Hacemos la agrupación correspondiente por las variables que vamos a usar.
-```{r}
-# # Instalar las librerías necesarias
-# if (!require("refund")) install.packages("refund")
-# # Cargar las librerías
-# library(refund)
-# 
-# # Preparar el dataset
-# # Agrupar por fecha y calcular la frecuencia diaria de delitos
-# delitos_agrupados <- delitos %>%
-#   group_by(fecha) %>%
-#   summarise(
-#     frecuencia_delitos = sum(cantidad),  # Nueva variable respuesta
-#     tipo_promedio = mean(tipo, na.rm = TRUE),  # Promedio de tipo por día
-#     franja_horaria_promedio = mean(franja_horaria, na.rm = TRUE)  # Promedio de franja horaria
-#   )
-# 
-# # Eliminar filas con valores faltantes
-# delitos_agrupados <- delitos_agrupados[complete.cases(delitos_agrupados), ]
 
-```
-
-## Creamos la variable indendiente y las matrices correspondientes
-
-```{r}
-# Crear la respuesta (frecuencia de delitos por día)
-# Y <- delitos_agrupados$frecuencia_delitos
-# 
-# # Crear una matriz funcional para 'tipo'
-# n_puntos <- 10  # Número de puntos funcionales
-# tipo_matrix <- matrix(rep(delitos_agrupados$tipo_promedio, each = n_puntos), 
-#                       nrow = nrow(delitos_agrupados), 
-#                       ncol = n_puntos)
-# 
-# # Crear una matriz funcional para 'franja_horaria'
-# franja_horaria_matrix <- matrix(rep(delitos_agrupados$franja_horaria_promedio, each = n_puntos), 
-#                                 nrow = nrow(delitos_agrupados), 
-#                                 ncol = n_puntos)
-# 
-# # Verificar dimensiones
-# print(length(Y))  # Longitud de Y
-# print(dim(tipo_matrix))  # Dimensiones de tipo_matrix
-# print(dim(franja_horaria_matrix))  # Dimensiones de franja_horaria_matrix
-
-```
-
-## Creamos el modelo con tipo de delito
-
-```{r}
-# # Ajustar el modelo funcional con 'tipo' como predictora funcional
-# modelo_refund_tipo <- pfr(
-#   Y ~ lf(tipo_matrix, bs = "ps"),  # lf() para predictoras funcionales
-#   data = delitos_agrupados
-# )
-# 
-# # Resumen del modelo
-# summary(modelo_refund_tipo)
-# 
-# # Visualizar el efecto funcional
-# plot(modelo_refund_tipo, main = "Efecto Funcional de Tipo de Delito", 
-#      xlab = "Dominio (Puntos Funcionales)", ylab = "Efecto")
-
-
-
-```
-# Creamos el modelo mixto con tipo y franja horaria
-
-```{r}
-# # Ajustar un modelo funcional con múltiples predictoras funcionales
-# modelo_refund_mixto <- pfr(
-#   Y ~ lf(tipo_matrix, bs = "ps") + lf(franja_horaria_matrix, bs = "ps"),
-#   data = delitos_agrupados
-# )
-# 
-# # Resumen del modelo mixto
-# summary(modelo_refund_mixto)
-# 
-# # Visualizar los efectos funcionales de las predictoras
-# plot(modelo_refund_mixto, main = "Efectos Funcionales de las Predictoras", pages = 1)
-
-
-```
-
-
-# Calculamos las métricas de la predicción
-```{r}
-# # Generar predicciones del modelo mixto
-# # Predicciones del modelo
-# predicciones <- predict(modelo_refund_mixto)
-# 
-# # Valores reales (frecuencia de delitos)
-# valores_reales <- Y
-# 
-# # Calcular MAE
-# mae <- mean(abs(valores_reales - predicciones))
-# 
-# # Calcular MSE
-# mse <- mean((valores_reales - predicciones)^2)
-# 
-# # Calcular RMSE
-# rmse <- sqrt(mse)
-# 
-# # Calcular R^2
-# sse <- sum((valores_reales - predicciones)^2)  # Suma de errores al cuadrado
-# sst <- sum((valores_reales - mean(valores_reales))^2)  # Suma total de cuadrados
-# r2 <- 1 - (sse / sst)
-# 
-# # Mostrar las métricas
-# cat("MAE:", mae, "\n")
-# cat("MSE:", mse, "\n")
-# cat("RMSE:", rmse, "\n")
-# cat("R^2:", r2, "\n")
-# 
-# # Graficar predicciones vs valores reales
-# plot(Y, predicciones, main = "Predicciones vs Valores Reales (Modelo Mixto)",
-#      xlab = "Valores Reales", ylab = "Predicciones", col = "blue")
-# abline(0, 1, col = "red")
-
-```
 ```{r}
 library(dplyr)
 
@@ -511,16 +564,19 @@ frecuencia_fd <- Data2fd(
 
 ```
 
+Frecuencia de delitos a lo largo del tiempo
 ```{r}
 # Graficar la curva funcional
 plot(frecuencia_fd, 
      main = "Frecuencia de Delitos a lo Largo del Tiempo", 
-     xlab = "Fechas", 
-     ylab = "Frecuencia de Delitos")
+      
+     ylab = "Frecuencia de Delitos" ,
+     xaxt = "n") # Evita dibujar el eje X automáticamente
 
 # Personalizar las etiquetas del eje X para mostrar fechas legibles
-fechas_legibles <- frecuencia_delitos_por_dia$fecha
-axis(1, at = as.numeric(fechas_legibles), labels = format(fechas_legibles, "%Y-%m-%d"), las = 2, cex.axis = 0.7)
+fechas_legibles <- frecuencia_delitos_por_dia$fecha # Asegúrate de que esta columna sea de clase Date o POSIXct
+axis.Date(1, at = fechas_legibles, format = "%Y-%m-%d", las = 2, cex.axis = 0.7)
+
 
 ```
 
@@ -552,7 +608,7 @@ print(dim(matriz_frecuencia))
 
 
 ```
-
+Grafico B-Spline
 ```{r}
 library(fda)
   
@@ -563,34 +619,10 @@ library(fda)
     n_basis <- 25  # Ajusta según el nivel de suavidad deseado
     basis <- create.bspline.basis(rangeval = range_horarios, nbasis = n_basis)
     
-plot(basis,xlab="horarios",ylab="valor base",main="Base B-Spline con 15 nodos",col=1:10 )
+plot(basis,xlab="horarios",ylab="valor base",main="Base B-Spline con 25 nodos",col=1:10 )
 
 ```
 
-```{r}
-# Crear el objeto funcional
-frecuencia_fd <- Data2fd(
-  argvals = as.numeric(colnames(matriz_frecuencia)),  # Franjas horarias como variable independiente
-  y = t(matriz_frecuencia),  # Transponer la matriz para que las filas sean funciones
-  basisobj = basis
-)
-
-
-
-```
-
-```{r}
-# Graficar todas las curvas funcionales
-plot(frecuencia_fd, 
-     main = "Frecuencia de Delitos por Horario y Día", 
-     xlab = "Horario", 
-     ylab = "Frecuencia de Delitos", 
-     col = rainbow(nrow(matriz_frecuencia)))  # Curvas en diferentes colores
-
-# Agregar una leyenda opcional
-legend("topright", legend = rownames(matriz_frecuencia), col = rainbow(nrow(matriz_frecuencia)), lty = 1, cex = 0.5)
-
-```
 ```{r}
 
 # Transponer la matriz: las filas serán las franjas horarias y las columnas las fechas
@@ -601,8 +633,6 @@ matriz_frecuencia_transpuesta <- t(matriz_frecuencia)
 ```{r}
 
 library(fda)
-
-
 
 # Asegurarte de que las franjas horarias son columnas
 matriz_frecuencia_transpuesta <- t(matriz_frecuencia_transpuesta)  # Ahora será 365 x 24
@@ -631,14 +661,14 @@ summary(frecuencia_fd)
 
 ```{r}
 
-plot(frecuencia_fd, 
-     main = "Frecuencia de delitos por franja horaria", 
-     xlab = "Fecha", 
-     ylab = "Frecuencia", 
-     col = rainbow(24))  # Colores para las 24 franjas horarias
-
-# Agregar leyenda para identificar cada franja horaria
-legend("topright", legend = paste0("Franja ", 0:23), col = rainbow(24), lty = 1, cex = 0.7)
+# plot(frecuencia_fd, 
+#      main = "Frecuencia de delitos por franja horaria", 
+#      xlab = "Fecha", 
+#      ylab = "Frecuencia", 
+#      col = rainbow(24))  # Colores para las 24 franjas horarias
+# 
+# # Agregar leyenda para identificar cada franja horaria
+# legend("topright", legend = paste0("Franja ", 0:23), col = rainbow(24), lty = 1, cex = 0.7)
 
 
 ```
@@ -806,14 +836,85 @@ browseURL("comparacion_graficos_final.png")
 
 
 ```
-
+##Grafico la derivada
 ```{r}
-# Calcular la derivada del objeto funcional frecuencia_fd
-frecuencia_fd_deriv <- fdata.deriv(frecuencia_fd)
 
-# Visualizar la derivada
-plot(frecuencia_fd_deriv, main = "Derivada de la Frecuencia de Delitos")
+# Supongamos que el rango del eje X corresponde a días desde una fecha base
+fecha_base <- as.Date("2023-01-01")
+x_vals <- seq(from = 19400, to = 19700, length.out = 10)
+
+# Convertir valores a fechas
+fechas <- fecha_base + (x_vals - min(x_vals))  # Ajusta según tu dato base
+
+# Volver a plotear con fechas en el eje X
+plot(frecuencia_fd_deriv, main = "Derivada de la Frecuencia de Delitos", xaxt = "n")
+axis(1, at = x_vals, labels = format(fechas, "%Y-%m-%d"))  # Mostrar fechas
 
 
 ```
+
+##Segunda derivada
+```{r}
+# Calcular la segunda derivada del objeto funcional (frecuencia_fd)
+segunda_derivada <- deriv.fd(frecuencia_fd, deriv = 2)
+
+# Verificar el objeto segunda_derivada
+print(segunda_derivada)
+```
+
+```{r}
+# Crear el gráfico de la segunda derivada sin eje X predeterminado
+plot(segunda_derivada, 
+     main = "Segunda Derivada de la Frecuencia de Delitos",
+     xlab = "t", 
+     ylab = "d²(X(t))/dt²", 
+     col = rainbow(24),  # Colores para las franjas horarias
+     lwd = 2,            # Grosor de las líneas
+     xaxt = "n")         # Ocultar etiquetas predeterminadas del eje X
+
+# Ajustar los valores del eje X (modificar el rango según tus datos)
+x_vals <- seq(from = 19400, to = 19700, length.out = 10)  # Ajusta el rango aquí
+fecha_base <- as.Date("2023-01-01")  # Ajustar fecha base si aplica
+fechas <- fecha_base + (x_vals - min(x_vals))  # Convertir índices a fechas
+
+# Agregar etiquetas al eje X
+axis(1, at = x_vals, labels = format(fechas, "%Y-%m-%d"))  # Etiquetas en formato de fecha
+
+
+```
+<br>
+
+Si quieres analizar incrementos y decrementos generales, la primera derivada es más útil.
+Si quieres identificar transiciones, picos o cambios en la dinámica de los datos, la segunda derivada proporciona más detalles.
+
+
+Este gráfico muestra la segunda derivada de la frecuencia de delitos respecto al tiempo, y nos permite analizar:
+
+Cambios en la concavidad:
+
+Cuando la segunda derivada cruza el eje 
+𝑦
+=
+0
+y=0, indica un cambio en la curvatura de la frecuencia de delitos:
+De cóncavo a convexo (o viceversa).
+Estos puntos son críticos para identificar patrones de aceleración o desaceleración en la frecuencia de delitos.
+Valores positivos:
+
+La frecuencia de delitos está acelerando su aumento (creciendo más rápido) o desacelerando su disminución (la disminución se suaviza).
+Valores negativos:
+
+La frecuencia de delitos está desacelerando su aumento (creciendo más lentamente) o acelerando su disminución (bajando más rápido).
+Regiones planas o cercanas a 0:
+
+Indican que el cambio en la velocidad (aceleración) es pequeño o constante en ese rango.
+En este gráfico:
+
+Observamos que hay fluctuaciones importantes al inicio (en torno a 19400) y al final (cerca de 19700).
+Esto puede indicar que en esos puntos hay eventos significativos o transiciones importantes en las franjas horarias o patrones temporales.
+<br>
+
+
+
+
 
