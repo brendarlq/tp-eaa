@@ -25,7 +25,7 @@ library(dplyr)
 
 ```{r}
 library(openxlsx)
-delitos <- read.xlsx("/Users/maria/Downloads/delitos_2023.xlsx")
+delitos <- read.xlsx("/Users/bquinonez/Downloads/delitos_2023.xlsx")
 delitos
 ```
 
@@ -259,7 +259,7 @@ del <- del %>%
   ))
 
 # Verificar la estructura del dataset después de las transformaciones
-str(delitos)
+str(del)
 
 ```
 
@@ -321,7 +321,7 @@ ggplot(delitos_temporal_h, aes(x = franja, y = total_delitos, color = tipo, grou
 
 
 
-Eliminación de Nulos (Pero tiene que ser transformación de nulos para no perder datos, lo hacemos después)
+Eliminación de Nulos
 
 ```{r}
 delitos <- na.omit(delitos)
@@ -409,8 +409,12 @@ ggplot(delitos_por_estacion, aes(x = estacion, y = total, fill = estacion)) +
 
 No hay casos de moto,y uso de arma
 ```{r}
-unique(delitos$uso_arma)
-unique(delitos$uso_moto)
+
+conteo_arma <- table(delitos$uso_arma)
+conteo_moto <- table(delitos$uso_moto)
+
+conteo_arma
+conteo_moto
 
 ```
 ```{r}
@@ -523,6 +527,16 @@ corrplot(as.matrix(matriz_cramer), is.corr = FALSE, method = "color", tl.cex = 0
 
 # 3) Aplicación de FDA
 
+1) Frecuencia de delitos agrupodos por fecha
+2) Frencuencia de delitos agrupados por franja
+3) Frencuencia de delitos agrupados por franja y fecha (24)
+4) Frecuencia de delitos por día de la semana (7)
+5) Frecuencia de delitos agrupodos por fecha para cada barrio
+6) Frecuencia de delitos agrupados por fecha por tipo de delito
+7) Frecuenda de delitos agrupados por franja horaria (Mañana, Tarde, Noche, Madrugada)
+
+
+# Frecuencia de delitos agrupado por fecha
 
 ```{r}
 library(dplyr)
@@ -580,6 +594,17 @@ axis.Date(1, at = fechas_legibles, format = "%Y-%m-%d", las = 2, cex.axis = 0.7)
 
 ```
 
+
+# Frecuencia de delitos agrupado por horario
+
+(Hacer)
+
+
+# Frecuencia de delitos agrupado por fecha, pero ver la gráfica de cada barrio o comuna (depende como salga)
+
+(Hacer)
+
+
 ```{r}
 library(dplyr)
 
@@ -594,7 +619,6 @@ summary(delitos_por_dia_horario)
 ```
 
 ```{r}
-if (!require("tibble")) install.packages("tibble")
 library(tibble)
 # Crear una matriz con filas como días y columnas como franjas horarias
 matriz_frecuencia <- delitos_por_dia_horario %>%
@@ -604,8 +628,6 @@ matriz_frecuencia <- delitos_por_dia_horario %>%
 
 # Dimensiones de la matriz
 print(dim(matriz_frecuencia))
-
-
 
 ```
 Grafico B-Spline
@@ -659,27 +681,13 @@ summary(frecuencia_fd)
 
 ```
 
-```{r}
-
-# plot(frecuencia_fd, 
-#      main = "Frecuencia de delitos por franja horaria", 
-#      xlab = "Fecha", 
-#      ylab = "Frecuencia", 
-#      col = rainbow(24))  # Colores para las 24 franjas horarias
-# 
-# # Agregar leyenda para identificar cada franja horaria
-# legend("topright", legend = paste0("Franja ", 0:23), col = rainbow(24), lty = 1, cex = 0.7)
-
-
-```
-
-
 
 
 ```{r}
 install.packages("RColorBrewer")
 library(RColorBrewer)
 
+fechas_date <- as.Date(fechas, origin = "1970-01-01")
 # Crear el gráfico con dimensiones ampliadas
 png("grafico_mejorado_legenda.png", width = 2000, height = 1200, res = 150)  # Resolución más alta
 
@@ -721,6 +729,7 @@ dev.off()
 browseURL("grafico_mejorado_legenda.png")
 
 ```
+
 
 
 
@@ -766,9 +775,13 @@ print(grafico_crudo)
 
 ```{r}
 # Librerías necesarias
+install.packages("RColorBrewer")
+install.packages("png")
+library(RColorBrewer)
 library(ggplot2)
 library(grid)
 library(gridExtra)
+library(png)
 
 # Crear el gráfico sin FDA
 png("grafico_sin_fda_separado.png", width = 1600, height = 900, res = 150)
@@ -838,10 +851,14 @@ browseURL("comparacion_graficos_final.png")
 ```
 ##Grafico la derivada
 ```{r}
+install.packages("fda.usc")
+library(fda.usc)
 
 # Supongamos que el rango del eje X corresponde a días desde una fecha base
 fecha_base <- as.Date("2023-01-01")
 x_vals <- seq(from = 19400, to = 19700, length.out = 10)
+
+frecuencia_fd_deriv <- fdata.deriv(frecuencia_fd)
 
 # Convertir valores a fechas
 fechas <- fecha_base + (x_vals - min(x_vals))  # Ajusta según tu dato base
@@ -913,6 +930,12 @@ En este gráfico:
 Observamos que hay fluctuaciones importantes al inicio (en torno a 19400) y al final (cerca de 19700).
 Esto puede indicar que en esos puntos hay eventos significativos o transiciones importantes en las franjas horarias o patrones temporales.
 <br>
+
+
+
+
+
+
 
 
 
