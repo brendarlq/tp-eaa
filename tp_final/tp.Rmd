@@ -160,21 +160,55 @@ dim(delitos)
 ```{r}
 # Instalar las librerías necesarias
 if (!require("refund")) install.packages("refund")
+if (!require("tidyverse")) install.packages("tidyverse")
 # Cargar las librerías
 library(refund)
+library(tidyverse)
+
+
+delitos_frecuencia <- delitos %>%
+  group_by(fecha) %>%
+  summarise(
+    frecuencia = sum(cantidad)
+  )
 
 # Preparar el dataset
 # Agrupar por fecha y calcular la frecuencia diaria de delitos
 delitos_agrupados <- delitos %>%
-  group_by(fecha) %>%
+  group_by(fecha, franja) %>%
   summarise(
-    frecuencia_delitos = sum(cantidad),  # Nueva variable respuesta
-    tipo_promedio = mean(tipo, na.rm = TRUE),  # Promedio de tipo por día
-    franja_horaria_promedio = mean(franja_horaria, na.rm = TRUE)  # Promedio de franja horaria
+    frecuencia = sum(cantidad)
+  )
+
+
+delitos_agrupados_tipo <- delitos %>%
+  group_by(fecha, tipo) %>%
+  summarise(
+    frecuencia = sum(cantidad)
   )
 
 # Eliminar filas con valores faltantes
 delitos_agrupados <- delitos_agrupados[complete.cases(delitos_agrupados), ]
+
+if (!require("tibble")) install.packages("tibble")
+library(tibble)
+# Crear una matriz con filas como días y columnas como franjas horarias
+franja_horaria_matrix <- delitos_agrupados %>%
+  pivot_wider(names_from = franja, values_from = frecuencia, values_fill = 0) %>%
+  column_to_rownames(var = "fecha") %>%
+  as.matrix()
+
+# Dimensiones de la matriz
+print(dim(franja_horaria_matrix))
+
+
+tipo_delito_matrix <- delitos_agrupados_tipo %>%
+  pivot_wider(names_from = tipo, values_from = frecuencia, values_fill = 0) %>%
+  column_to_rownames(var = "fecha") %>%
+  as.matrix()
+
+# Dimensiones de la matriz
+print(dim(tipo_delito_matrix))
 
 ```
 
@@ -182,23 +216,22 @@ delitos_agrupados <- delitos_agrupados[complete.cases(delitos_agrupados), ]
 
 ```{r}
 # Crear la respuesta (frecuencia de delitos por día)
-Y <- delitos_agrupados$frecuencia_delitos
+Y <- delitos_frecuencia$frecuencia
 
 # Crear una matriz funcional para 'tipo'
-n_puntos <- 10  # Número de puntos funcionales
-tipo_matrix <- matrix(rep(delitos_agrupados$tipo_promedio, each = n_puntos), 
-                      nrow = nrow(delitos_agrupados), 
-                      ncol = n_puntos)
+# n_puntos <- 10  # Número de puntos funcionales
+# tipo_matrix <- matrix(rep(delitos_agrupados$tipo_promedio, each = n_puntos), 
+#                      nrow = nrow(delitos_agrupados), 
+#                      ncol = n_puntos)
 
 # Crear una matriz funcional para 'franja_horaria'
-franja_horaria_matrix <- matrix(rep(delitos_agrupados$franja_horaria_promedio, each = n_puntos), 
-                                nrow = nrow(delitos_agrupados), 
-                                ncol = n_puntos)
+# franja_horaria_matrix <- matrix(rep(delitos_agrupados$franja_horaria_promedio, each = n_puntos), 
+#                                nrow = nrow(delitos_agrupados), 
+#                                ncol = n_puntos)
 
 # Verificar dimensiones
 print(length(Y))  # Longitud de Y
-print(dim(tipo_matrix))  # Dimensiones de tipo_matrix
-print(dim(franja_horaria_matrix))  # Dimensiones de franja_horaria_matrix
+print(dim(franja_horaria_matrix))  # Dimensiones de tipo_matrix
 
 ```
 
@@ -207,7 +240,7 @@ print(dim(franja_horaria_matrix))  # Dimensiones de franja_horaria_matrix
 ```{r}
 # Ajustar el modelo funcional con 'tipo' como predictora funcional
 modelo_refund_tipo <- pfr(
-  Y ~ lf(tipo_matrix, bs = "ps"),  # lf() para predictoras funcionales
+  Y ~ lf(franja_horaria_matrix, bs = "ps"),  # lf() para predictoras funcionales
   data = delitos_agrupados
 )
 
@@ -215,7 +248,7 @@ modelo_refund_tipo <- pfr(
 summary(modelo_refund_tipo)
 
 # Visualizar el efecto funcional
-plot(modelo_refund_tipo, main = "Efecto Funcional de Tipo de Delito", 
+plot(modelo_refund_tipo, main = "Efecto Funcional de Franja", 
      xlab = "Dominio (Puntos Funcionales)", ylab = "Efecto")
 
 
