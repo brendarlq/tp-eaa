@@ -25,7 +25,7 @@ library(dplyr)
 
 ```{r}
 library(openxlsx)
-delitos <- read.xlsx("/Users/bquinonez/Downloads/delitos_2023.xlsx")
+delitos <- read.xlsx("/Users/maria/Downloads/delitos_2023.xlsx")
 delitos
 ```
 
@@ -417,113 +417,11 @@ conteo_arma
 conteo_moto
 
 ```
-```{r}
-# Instalar y cargar paquetes necesarios
-if (!require("corrplot")) install.packages("corrplot")
-if (!require("dplyr")) install.packages("dplyr")
-
-library(corrplot)
-library(dplyr)
-
-# Seleccionar columnas numéricas y excluir 'id_sum' y 'comuna_cod'
-datos_numericos <- del %>%
-  select_if(is.numeric) %>%
-  select( -comuna_cod)
-
-# Verificar las columnas seleccionadas
-print(names(datos_numericos))
-
-# Calcular la matriz de correlación
-matriz_correlacion <- cor(datos_numericos, use = "complete.obs")
-
-# Graficar el corrplot
-corrplot(matriz_correlacion, method = "color", type = "upper",
-         title = "Mapa de Correlación (Excluyendo id_sum y comuna_cod)", 
-         tl.col = "black", tl.srt = 45, addCoef.col = "black", number.cex = 0.7)
 
 
-```
-el corrplot no funciona bien en variables categóricas codificadas
-
-```{r}
-if (!require("GGally")) install.packages("GGally")
-library(GGally)
-
-# Seleccionar un subconjunto de variables (numéricas y categóricas)
-variables_seleccionadas <- del %>%
-  select(anio, tipo, estacion, franja,mes)
-
-# Graficar el scatterplot matrix para variables mixtas
-ggpairs(variables_seleccionadas, title = "Análisis Mixto de Variables")
 
 
-```
-```{r}
-# Función para calcular correlaciones mixtas
-calcular_correlacion <- function(x, y) {
-  if (is.numeric(x) && is.numeric(y)) {
-    return(cor(x, y, use = "complete.obs"))  # Pearson para numéricas
-  } else if (is.factor(x) && is.factor(y)) {
-    return(CramerV(x, y))  # Cramér V para categóricas
-  } else if (is.factor(x) && is.numeric(y)) {
-    return(sqrt(summary(aov(y ~ x))[[1]][["Sum Sq"]][1] / sum(summary(aov(y ~ x))[[1]][["Sum Sq"]])))  # Eta cuadrado
-  } else if (is.numeric(x) && is.factor(y)) {
-    return(sqrt(summary(aov(x ~ y))[[1]][["Sum Sq"]][1] / sum(summary(aov(x ~ y))[[1]][["Sum Sq"]])))  # Eta cuadrado
-  } else {
-    return(NA)
-  }
-}
-
-# Crear una matriz para variables mixtas
-variables <- del  # Usar el dataset completo
-n <- ncol(variables)
-matriz_mixta <- matrix(NA, nrow = n, ncol = n,
-                       dimnames = list(names(variables), names(variables)))
-
-# Calcular correlaciones mixtas
-for (i in 1:n) {
-  for (j in i:n) {
-    matriz_mixta[i, j] <- calcular_correlacion(variables[[i]], variables[[j]])
-    matriz_mixta[j, i] <- matriz_mixta[i, j]  # Matriz simétrica
-  }
-}
-
-# Graficar la matriz mixta
-library(corrplot)
-corrplot(as.matrix(matriz_mixta), is.corr = FALSE, method = "color", tl.cex = 0.8,
-         title = "Matriz de Correlaciones Mixtas", mar = c(0, 0, 2, 0))
-
-```
-```{r}
-# Instalar y cargar el paquete necesario
-if (!require("DescTools")) install.packages("DescTools")
-library(DescTools)
-
-# Seleccionar solo variables categóricas
-variables_categoricas <- del %>%
-  select_if(is.factor)  # Filtrar columnas categóricas (factores)
-
-# Crear una matriz vacía para almacenar los coeficientes
-n <- ncol(variables_categoricas)
-matriz_cramer <- matrix(NA, nrow = n, ncol = n,
-                        dimnames = list(names(variables_categoricas), names(variables_categoricas)))
-
-# Calcular Cramér V para cada combinación de variables categóricas
-for (i in 1:n) {
-  for (j in i:n) {
-    matriz_cramer[i, j] <- CramerV(variables_categoricas[[i]], variables_categoricas[[j]])
-    matriz_cramer[j, i] <- matriz_cramer[i, j]  # Matriz simétrica
-  }
-}
-
-# Convertir a data.frame para graficar
-library(corrplot)
-corrplot(as.matrix(matriz_cramer), is.corr = FALSE, method = "color", tl.cex = 0.8,
-         title = "Matriz de Asociación - Cramér V", mar = c(0, 0, 2, 0))
-
-
-```
-
+<br>
 
 # 3) Aplicación de FDA
 
@@ -534,9 +432,9 @@ corrplot(as.matrix(matriz_cramer), is.corr = FALSE, method = "color", tl.cex = 0
 5) Frecuencia de delitos agrupodos por fecha para cada barrio
 6) Frecuencia de delitos agrupados por fecha por tipo de delito
 7) Frecuenda de delitos agrupados por franja horaria (Mañana, Tarde, Noche, Madrugada)
+<br>
 
-
-# Frecuencia de delitos agrupado por fecha
+## Frecuencia de delitos agrupado por fecha
 
 ```{r}
 library(dplyr)
@@ -599,11 +497,352 @@ axis.Date(1, at = fechas_legibles, format = "%Y-%m-%d", las = 2, cex.axis = 0.7)
 
 (Hacer)
 
+```{r}
+# Agrupar por día y horario, y contar la frecuencia de delitos
+delitos_por_dia <- delitos %>%
+  group_by(fecha) %>%  # 'franja_horaria' representa los horarios
+  summarise(frecuencia = n(), .groups = "drop")
+
+# Asegúrate de que las fechas estén en formato Date
+delitos_por_dia$fecha <- as.Date(delitos_por_dia$fecha, origin = "1899-12-30")
+summary(delitos_por_dia)
+```
+```{r}
+library(dplyr)
+library(tidyr)
+library(tibble)
+delitos_por_fecha <- delitos %>%
+  group_by(fecha) %>%
+  summarise(frecuencia = n(), .groups = "drop")
+
+# Asegúrate de que las fechas estén en formato Date
+delitos_por_fecha$fecha <- as.Date(delitos_por_fecha$fecha, origin = "1899-12-30")
+
+# Crear la matriz
+matriz_frecuencia <- delitos_por_fecha %>%
+  column_to_rownames(var = "fecha") %>%
+  as.matrix()
+
+rownames(matriz_frecuencia)  # Verifica nuevamente
+
+
+
+```
+
+```{r}
+library(fda.usc)
+argvals <- as.numeric(as.Date(rownames(matriz_frecuencia)))
+
+
+library(fda.usc)
+
+# Crear el objeto funcional con fdata
+frecuencia_fdata <- fdata(
+  t(matriz_frecuencia),        # Matriz transpuesta: 1 observación x 365 fechas
+  argvals = argvals,           # Fechas numéricas como puntos de evaluación
+  rangeval = range(argvals)    # Rango de los valores de `argvals`
+)
+
+# Verificar el objeto funcional
+print(frecuencia_fdata)
+
+
+```
+
+```{r}
+#
+# Crear la base funcional B-spline
+n_basis <- 25  # Ajusta el número de bases según la complejidad deseada
+basis <- create.bspline.basis(
+  rangeval = range(argvals), 
+  nbasis = n_basis
+)
+
+
+
+```
+
+```{r}
+# Graficar los datos funcionales
+plot(frecuencia_fdata, 
+     main = "Frecuencia de Delitos (Datos Funcionales)", 
+     xlab = "Fecha", 
+     ylab = "Frecuencia de Delitos")
+
+```
+
+
+```{r}
+# Ajustar el modelo funcional
+modelo_funcional <- fregre.basis(
+  fdataobj = frecuencia_fdata,  # Objeto funcional creado
+  y = y_values,                 # Respuesta (frecuencia de delitos)
+  basis.x = basis               # Base funcional para el predictor
+)
+
+# Resumen del modelo funcional
+summary(modelo_funcional)
+
+```
+```{r}
+# Verificar la dimensión del objeto funcional
+dim(frecuencia_fdata$data)  # Debería ser una matriz con filas como observaciones y columnas como puntos en argvals
+
+# Verificar la longitud del vector y_values
+length(y_values)
+
+```
+
+
+##frecuencia de delitos por tipo y fecha
+
+```{r}
+# Agrupar por tipo y fecha, y calcular la frecuencia de delitos
+frecuencia_por_tipo <- delitos %>%
+  group_by(tipo, fecha) %>%
+  summarise(frecuencia = n(), .groups = "drop")
+
+# Asegúrate de que las fechas estén en formato Date
+frecuencia_por_tipo$fecha <- as.Date(frecuencia_por_tipo$fecha, origin = "1899-12-30")
+
+# Definir argvals como las fechas únicas ordenadas
+argvals <- as.numeric(as.Date(colnames(matriz_frecuencia)))
+
+# Verifica las dimensiones
+dim(matriz_frecuencia)
+
+# Verifica que no haya valores no válidos
+any(is.na(matriz_frecuencia))  # ¿Hay NA?
+any(is.infinite(matriz_frecuencia))  # ¿Hay infinitos?
+
+
+```
+
+
+
+```{r}
+library(fda)
+
+# Asegúrate de que las columnas representan fechas
+fechas <- as.Date(colnames(matriz_frecuencia), format = "%Y-%m-%d")
+
+# Verifica si hay problemas con las fechas
+any(is.na(fechas))  # Si es TRUE, hay un problema en el formato de las fechas
+
+# Convierte las fechas a números
+argvals <- as.numeric(fechas)
+
+# Verifica que no haya valores NA
+if (any(is.na(argvals))) {
+  stop("Las columnas de `matriz_frecuencia` no se pueden convertir en valores numéricos.")
+}
+
+# Rango de las fechas numéricas
+rangeval <- range(argvals)
+
+```
+```{r}
+basis <- create.bspline.basis(rangeval = rangeval, nbasis = nbasis)
+
+```
+
+
+```{r}
+frecuencia_fdata <- Data2fd(
+  argvals = argvals,             # Fechas numéricas corregidas
+  y = t(matriz_frecuencia),      # Matriz transpuesta: tipos x fechas
+  basisobj = basis               # Base funcional
+)
+
+# Verifica el objeto funcional
+print(frecuencia_fdata)
+
+```
+
+
+
+```{r}
+# Graficar las funciones de cada tipo
+plot(frecuencia_fdata, 
+     main = "Frecuencia de Delitos por Tipo (Datos Funcionales)", 
+     xlab = "Fecha", 
+     ylab = "Frecuencia de Delitos",
+     col = rainbow(nrow(matriz_frecuencia)),  # Colores para cada tipo
+     lwd = 2)  # Grosor de las líneas
+
+# Agregar leyenda con los nombres de los tipos
+legend("topright", 
+       legend = rownames(matriz_frecuencia), 
+       col = rainbow(nrow(matriz_frecuencia)), 
+       lty = 1, lwd = 2)
+
+```
+
+```{r}
+library(fda.usc)
+
+# Definir la variable respuesta (total de delitos por tipo)
+respuesta <- rowSums(matriz_frecuencia)
+
+# Ajustar el modelo de regresión funcional
+modelo_funcional <- fregre.basis(
+  fdataobj = frecuencia_fdata,  # Datos funcionales (predictores)
+  y = respuesta,                # Variable respuesta
+  basis.x = basis,              # Base funcional para los predictores
+  basis.y = basis               # Base funcional para la respuesta
+)
+
+# Ver el resumen del modelo
+summary(modelo_funcional)
+
+# Inspeccionar el modelo
+summary(modelo_funcional)  # Verifica si se ajustó correctamente
+
+# Rango de los coeficientes funcionales
+# Rango de los coeficientes funcionales
+range(modelo_funcional$beta.est$coefs, na.rm = TRUE)
+
+# Revisa las dimensiones y los valores
+dim(modelo_funcional$beta.est$coefs)  # Dimensiones
+head(modelo_funcional$beta.est$coefs)  # Inspección de los primeros valores
+
+
+```
+```{r}
+# Extraer los valores de los coeficientes
+coeficientes <- modelo_funcional$beta.est$coefs[, 1]  # Seleccionar la primera columna
+
+# Graficar los coeficientes manualmente
+plot(coeficientes, 
+     type = "b",  # Línea con puntos
+     col = "blue",
+     pch = 16,  # Forma de los puntos
+     lwd = 2,   # Grosor de la línea
+     main = "Coeficientes Funcionales del Modelo", 
+     xlab = "Índice de la Base B-Spline", 
+     ylab = "Valor del Coeficiente",
+     ylim = c(0.7, 1.3))  # Ajustar el rango del eje y
+
+```
+
+```{r}
+# Graficar el objeto funcional
+plot(modelo_funcional$beta.est, 
+     main = "Coeficientes Funcionales (Continuos)",
+     xlab = "Tiempo", 
+     ylab = "Peso de los Tipos de Delitos",
+     col = "red", 
+     lwd = 2)
+
+```
+
+```{r}
+plot(frecuencia_fdata, 
+     main = "Frecuencia de Delitos por Tipo (Datos Funcionales)", 
+     xlab = "Fecha", 
+     ylab = "Frecuencia de Delitos",
+     col = rainbow(nrow(matriz_frecuencia)),  # Colores para cada tipo
+     lwd = 2)  # Grosor de las líneas
+
+# Agregar una leyenda con los tipos
+legend("topright", 
+       legend = rownames(matriz_frecuencia), 
+       col = rainbow(nrow(matriz_frecuencia)), 
+       lty = 1, lwd = 2)
+
+```
+```{r}
+# Verificar valores no válidos en la matriz
+any(is.na(matriz_frecuencia))  # ¿Hay NA?
+any(is.infinite(matriz_frecuencia))  # ¿Hay valores infinitos?
+
+```
+
+
+
+
+```{r}
+library(fda.usc)
+
+# Ajustar el modelo de regresión funcional
+modelo_funcional <- fregre.basis(
+  fdataobj = frecuencia_fdata,    # Datos funcionales
+  y = rowSums(matriz_frecuencia), # Suma total de delitos por tipo
+  basis.x = basis,                # Base funcional
+  basis.y = basis                 # Base funcional para la respuesta
+)
+
+# Resumen del modelo
+summary(modelo_funcional)
+
+# Coeficientes funcionales
+plot(modelo_funcional$beta.est, 
+     main = "Coeficientes Funcionales del Modelo", 
+     xlab = "Fecha", 
+     ylab = "Peso de los Tipos de Delitos")
+
+
+# Supongamos que `pred_matrix` es una matriz con predictores funcionales (dimensiones deben coincidir)
+pred_fdata <- fdata(
+  t(matriz_frecuencia),  # Transponemos para que cada fila sea un predictor funcional
+  argvals = 1:ncol(matriz_frecuencia),  # Eje X: franjas horarias (o puntos temporales)
+  rangeval = c(1, ncol(matriz_frecuencia))  # Rango del eje X
+)
+
+# Crear un modelo funcional básico con predictores funcionales
+modelo <- fregre.basis(
+  fdataobj = frecuencia_fdata,  # Objeto funcional de respuesta
+  y = frecuencia_delitos_por_dia$frecuencia,  # Variable respuesta asociada
+  x = pred_fdata,               # Predictores funcionales
+  basis.x = basis_pred,         # Base para los predictores
+  basis.y = basis               # Base para la respuesta
+)
+
+```
+
+```{r}
+plot(frecuencia_fdata, 
+     main = "Frecuencia de Delitos por Tipo (Datos Funcionales)", 
+     xlab = "Fecha", 
+     ylab = "Frecuencia de Delitos",
+     col = rainbow(nrow(matriz_frecuencia)),  # Colores para cada tipo
+     lwd = 2)  # Grosor de las líneas
+
+# Agregar una leyenda con los tipos
+legend("topright", 
+       legend = rownames(matriz_frecuencia), 
+       col = rainbow(nrow(matriz_frecuencia)), 
+       lty = 1, lwd = 2)
+
+```
+
+
+
+```{r}
+# Filtrar las fechas únicas en el mismo orden que en la matriz
+fechas_unicas <- unique(frecuencia_categoria$fecha)
+fechas_unicas <- fechas_unicas[order(fechas_unicas)]
+
+# Ajustar `argvals` al número de columnas de la matriz
+argvals <- as.numeric(fechas_unicas)
+
+```
+```{r}
+matriz_frecuencia <- frecuencia_categoria %>%
+  pivot_wider(names_from = fecha, values_from = frecuencia, values_fill = 0) %>%
+  column_to_rownames(var = "tipo") %>%
+  as.matrix()
+
+# Verificar dimensiones
+dim(matriz_frecuencia)  # Filas = categorías, Columnas = fechas
+
+```
 
 # Frecuencia de delitos agrupado por fecha, pero ver la gráfica de cada barrio o comuna (depende como salga)
 
 (Hacer)
 
+#3) Frencuencia de delitos agrupados por franja y fecha (24)
 
 ```{r}
 library(dplyr)
@@ -936,6 +1175,61 @@ Esto puede indicar que en esos puntos hay eventos significativos o transiciones 
 
 
 
+
+##Freuencia de delitos agrupados por fecha
+
+```{r}
+# Instalar y cargar los paquetes necesarios
+if (!require("fda.usc")) install.packages("fda.usc")
+library(fda.usc)
+library(dplyr)
+
+# 1. Agrupar y procesar los datos
+frecuencia_delitos_por_dia <- delitos %>%
+  group_by(fecha) %>%
+  summarise(frecuencia = n(), .groups = "drop")
+
+# Asegurar que las fechas estén en formato Date y luego convertirlas a numéricas
+frecuencia_delitos_por_dia$fecha <- as.Date(frecuencia_delitos_por_dia$fecha)
+frecuencia_delitos_por_dia$fecha_num <- as.numeric(frecuencia_delitos_por_dia$fecha)
+
+# Crear el rango de fechas (argvals)
+argvals <- frecuencia_delitos_por_dia$fecha_num
+
+# Crear la matriz de observaciones
+# Cada observación es una fila (número de fechas observadas)
+y_matrix <- matrix(frecuencia_delitos_por_dia$frecuencia, 
+                   nrow = length(frecuencia_delitos_por_dia$frecuencia), 
+                   ncol = 1)
+
+# Crear el objeto funcional `fdata`
+frecuencia_fdata <- fdata(y_matrix, argvals = argvals)
+
+# Verificar dimensiones del objeto funcional
+print(dim(frecuencia_fdata$data))  # Debe coincidir con las fechas observadas
+
+# 2. Crear el vector de respuesta y predictor
+y <- frecuencia_delitos_por_dia$frecuencia  # Variable respuesta
+x <- data.frame(intercepto = 1)            # Predictor constante (intercepto)
+
+# 3. Ajustar el modelo funcional de regresión
+modelo_fda <- fregre.basis(fdataobj = frecuencia_fdata, y = y, x = x)
+
+# 4. Resumen del modelo
+summary(modelo_fda)
+
+# 5. Graficar los valores ajustados y observados
+plot(argvals, modelo_fda$fitted.values, type = "l", col = "blue", lwd = 2,
+     main = "Modelo FDA: Frecuencia de Delitos",
+     xlab = "Fecha Numérica",
+     ylab = "Frecuencia Ajustada")
+points(argvals, y, col = "red", pch = 16)
+legend("topright", legend = c("Ajustada", "Real"), col = c("blue", "red"), lty = 1, lwd = 2, pch = c(NA, 16))
+topright", legend = c("Ajustada", "Real"), col = c("blue", "red"), lty = 1, lwd = 2, pch = c(NA, 16))
+
+
+
+```
 
 
 
