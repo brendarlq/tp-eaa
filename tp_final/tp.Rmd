@@ -158,57 +158,73 @@ dim(delitos)
 
 ## Hacemos la agrupación correspondiente por las variables que vamos a usar.
 ```{r}
-# Instalar las librerías necesarias
-if (!require("refund")) install.packages("refund")
-if (!require("tidyverse")) install.packages("tidyverse")
-# Cargar las librerías
+# Cargar librerías necesarias
+library(dplyr)
+library(tidyr)
+library(openxlsx)
 library(refund)
-library(tidyverse)
+library(ggplot2)
+library(fda.usc)
 
-
-delitos_frecuencia <- delitos %>%
-  group_by(fecha) %>%
-  summarise(
-    frecuencia = sum(cantidad)
-  )
-
-# Preparar el dataset
-# Agrupar por fecha y calcular la frecuencia diaria de delitos
+# 2. Agrupación por barrio y fecha
+# Agrupar por barrio y fecha y contar delitos
 delitos_agrupados <- delitos %>%
-  group_by(fecha, franja) %>%
+  group_by(barrio, fecha) %>%
   summarise(
-    frecuencia = sum(cantidad)
+    frecuencia = n(),  # Contar filas
+    .groups = "drop"
   )
 
+# Revisar los datos agregados
+head(delitos_agrupados)
 
-delitos_agrupados_tipo <- delitos %>%
-  group_by(fecha, tipo) %>%
-  summarise(
-    frecuencia = sum(cantidad)
-  )
-
-# Eliminar filas con valores faltantes
-delitos_agrupados <- delitos_agrupados[complete.cases(delitos_agrupados), ]
-
-if (!require("tibble")) install.packages("tibble")
-library(tibble)
-# Crear una matriz con filas como días y columnas como franjas horarias
-franja_horaria_matrix <- delitos_agrupados %>%
-  pivot_wider(names_from = franja, values_from = frecuencia, values_fill = 0) %>%
-  column_to_rownames(var = "fecha") %>%
+# 3. Creación de la matriz funcional
+# Crear matriz funcional con fechas como columnas
+delitos_matrix <- delitos_agrupados %>%
+  pivot_wider(names_from = fecha, values_from = frecuencia, values_fill = 0) %>%
+  column_to_rownames(var = "barrio") %>%
   as.matrix()
 
-# Dimensiones de la matriz
-print(dim(franja_horaria_matrix))
+# Verificar dimensiones
+dim(delitos_matrix)
 
+# 4. Análisis funcional
+# Normalizar las funciones (opcional)
+delitos_matrix_scaled <- scale(delitos_matrix)
 
-tipo_delito_matrix <- delitos_agrupados_tipo %>%
-  pivot_wider(names_from = tipo, values_from = frecuencia, values_fill = 0) %>%
-  column_to_rownames(var = "fecha") %>%
-  as.matrix()
+# Revisar la variabilidad de las filas
+variabilidad <- apply(delitos_matrix_scaled, 1, var)
+print(variabilidad)
 
-# Dimensiones de la matriz
-print(dim(tipo_delito_matrix))
+# Filtrar barrios con baja variabilidad
+delitos_matrix_scaled <- delitos_matrix_scaled[variabilidad > 0.01, ]
+
+# Validar que hay suficientes observaciones para clustering
+if (nrow(delitos_matrix_scaled) < 3) {
+  stop("No hay suficientes barrios con datos válidos para realizar clustering.")
+}
+
+# Convertir a objeto funcional
+fdata_obj <- fdata(delitos_matrix_scaled)
+
+# Clustering funcional con kmeans.fd
+set.seed(123)  # Fijar semilla para reproducibilidad
+clustering_result <- kmeans.fd(fdata_obj, ncl = 5, par.ini = list(method = "kmeans++"))
+
+# Asignar clusters a los barrios
+clusters <- data.frame(barrio = rownames(delitos_matrix_scaled), cluster = clustering_result$cluster)
+
+# 5. Visualización de curvas funcionales
+# Crear un dataframe para visualización
+df_curves <- as.data.frame(delitos_matrix_scaled) %>%
+  rownames_to_column("barrio") %>%
+  pivot_longer(-barrio, names_to = "dia", values_to = "frecuencia")
+
+# Graficar las curvas funcionales por cluster
+ggplot(df_curves, aes(x = dia, y = frecuencia, group = barrio, color = as.factor(clusters$cluster))) +
+  geom_line(alpha = 0.7) +
+  theme_minimal() +
+  labs(title = "Clustering Funcional por Barrio", x = "Día", y = "Frecuencia", color = "Cluster")
 
 ```
 
@@ -232,6 +248,13 @@ Y <- delitos_frecuencia$frecuencia
 # Verificar dimensiones
 print(length(Y))  # Longitud de Y
 print(dim(franja_horaria_matrix))  # Dimensiones de tipo_matrix
+
+n_fechas <- length(unique(delitos$fecha))
+n_franjas <- length(unique(delitos$franja))
+
+cat("Dimensiones esperadas de franja_horaria_matrix:", n_fechas, "x", n_franjas, "\n")
+cat("Dimensiones reales:", dim(franja_horaria_matrix), "\n")
+
 
 ```
 
@@ -259,7 +282,7 @@ plot(modelo_refund_tipo, main = "Efecto Funcional de Franja",
 ```{r}
 # Ajustar un modelo funcional con múltiples predictoras funcionales
 modelo_refund_mixto <- pfr(
-  Y ~ lf(tipo_matrix, bs = "ps") + lf(franja_horaria_matrix, bs = "ps"),
+  Y ~ lf(tipo_delito_matrix, bs = "ps") + lf(franja_horaria_matrix, bs = "ps"),
   data = delitos_agrupados
 )
 
