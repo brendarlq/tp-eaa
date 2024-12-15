@@ -1,6 +1,12 @@
 ---
-title: "Trabajo Práctico final EEA-2024"
-output: html_notebook
+title: "Trabajo Práctico Final EEA-2024"
+output: 
+  html_document:
+    css: styles.css
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    authors: Quiñonez Brenda, Villegas Ma.Eugenia
 ---
 
 ```{r}
@@ -123,20 +129,30 @@ delitos <- delitos %>%
 head(delitos[c("longitud", "latitud")])
 ```
 
-Eliminación de nulos y barrios que no forman parte de CABA
+Eliminación de nulos y barrios que no forman parte de CABA dado que no es una cantidad que afecte el análisis.
 
 ```{r}
 library(stringr)
 delitos <- na.omit(delitos)
 dim(delitos)
 
-delitos <- delitos %>% 
-  filter(barrio != "0", barrio != "Sin geo", barrio != "NULL", barrio != "NO ESPECIFICADA", barrio != "GREGORIO DE LAFERRERE") %>%
-  mutate(barrio = str_replace_all(barrio, "NUNEZ", "NUÑEZ"))
+# Filtrar y renombrar barrios
+delitos <- delitos %>%
+  filter(!barrio %in% c("0", "Sin geo", "NULL", "NO ESPECIFICADA", 
+                        "GREGORIO DE LAFERRERE", "BANFIELD OESTE", 
+                        "BERNAL", "DOCK SUD", "SANTA MARÍA", 
+                        "VILLA LUZURIAGA", "SD", "CASEROS", "AV BOEDO", "RODRIGO BUENO")) %>%
+  mutate(
+    barrio = str_replace_all(barrio, "NUNEZ", "NUÑEZ"),
+    barrio = str_replace_all(barrio, "LA BOCA", "BOCA"),
+    barrio = str_replace_all(barrio, "CONTITUCIÓN", "CONSTITUCION"),
+    barrio = str_replace_all(barrio, "CONTITUCION", "CONSTITUCION"),
+    barrio = str_replace_all(barrio, "CONSTITUCIÓN", "CONSTITUCION")
+  )
 
 ```
 
-Luego de la limpieza quedaron un total de 154521 y 18 atributos, ya que arreglamos 3 variables adicionales: franja_horaria, dia y estacion
+Luego de la limpieza quedaron un total de 155505 y 18 atributos, ya que agregamos 3 variables adicionales: franja_horaria, dia y estacion
 
 ## Gráficos exploratorios
 
@@ -151,7 +167,7 @@ delitos_agrupados_tipo <- delitos %>%
   summarise(total = n(), .groups = "drop")
 
 # Crear el gráfico sin números
-grafico_apilado <- ggplot(delitos_agrupados, aes(x = mes, y = total, fill = tipo)) +
+grafico_apilado <- ggplot(delitos_agrupados_tipo, aes(x = mes, y = total, fill = tipo)) +
   geom_bar(stat = "identity", position = "stack") +
   facet_wrap(~ tipo, scales = "free_y") +  # Dividir por tipo de delito
   labs(
@@ -351,6 +367,7 @@ ggsave("grafico_delitos_totales_barrio.png", width = 12, height = 8, dpi = 300)
 
 
 ```
+
 ### Dia de semana vs Finde
 ```{r}
 # Agrupar los datos por día de la semana
@@ -626,7 +643,7 @@ browseURL("grafico_barrios_sin_fda.png")
 
 ![Curvas por Barrio (Sin FDA ni suavizado)](grafico_barrios_sin_fda.png)
 
-### Graficamos el método de codo y silhouette para definir el número de clusters
+#### Graficamos el método de codo y silhouette para definir el número de clusters
 
 ```{r}
 dim(delitos_matrix)  # Deberías ver (n_barrio, n_fechas)
@@ -679,7 +696,8 @@ cluster_sizes <- clusters %>%
   summarise(n_barrios = n()) %>%
   mutate(cluster_label = paste0("Cluster ", cluster, " (n=", n_barrios, ")"))
 
-# Convertir `cluster` a character o factor en ambos dataframes
+# Calcular PCA en la matriz normalizada
+pca_result <- prcomp(delitos_matrix_normalized, center = TRUE, scale. = TRUE)
 pca_data <- as.data.frame(pca_result$x[, 1:2])  # Tomar las dos primeras componentes
 pca_data$cluster <- as.factor(clusters$cluster)  # Convertir a factor
 
@@ -716,7 +734,7 @@ print(resumen_clusters)
 
 ```
 
-### Aplicamos silhouette para validar los clusters
+#### Aplicamos silhouette para validar los clusters
 
 ```{r}
 library(cluster)
@@ -742,7 +760,7 @@ fviz_silhouette(silhouette_result) +
 ```
 
 
-## b) CON FDA: Creamos las curvas por barrio a lo largo del 2023 con FDA.
+### b) CON FDA: Creamos las curvas por barrio a lo largo del 2023 con FDA.
 
 ```{r}
 
@@ -813,7 +831,7 @@ wss <- sapply(2:10, function(k) {
 
 ![Curvas por Barrio suavizada con FDA)](grafico_barrios_con_fda.png)
 
-### Graficamos el método de codo y silhouette para definir el número de clusters
+#### Graficamos el método de codo y silhouette para definir el número de clusters
 
 ```{r}
 # Graficar el método del codo
@@ -829,7 +847,7 @@ fviz_nbclust(fd_obj_suavizado$coefs, kmeans, method = "silhouette") +
   labs(title = "Índice de Silhouette")
 ```
 
-### Definimos los clusters correspondientes
+#### Definimos los clusters correspondientes
 
 ```{r}
 
@@ -843,7 +861,7 @@ kmeans_result <- kmeans(t(fd_obj_suavizado$coefs), centers = num_clusters, nstar
 
 ```
 
-### Graficamos los clusters 
+#### Graficamos los clusters 
 
 
 ```{r}
@@ -904,7 +922,7 @@ print(tabla_barrios)
 
 ```
 
-### Graficamos las curvas promedios por cluster 
+#### Graficamos las curvas promedios por cluster 
 
 ```{r}
 # Calcular la frecuencia promedio por cluster y fecha
@@ -928,7 +946,7 @@ ggplot() +
 
 ```
 
-### Validación de clusters con Silhouette
+#### Validación de clusters con Silhouette
 
 ```{r}
 if (!require("cluster")) install.packages("cluster")
@@ -941,7 +959,8 @@ clusters <- df_curves %>%
   distinct(barrio, cluster) %>%
   arrange(barrio)  # Ordenar por barrio para garantizar coincidencia
 
-matriz_clustering <- matriz_clustering[order(rownames(matriz_clustering)), ]  # Ordenar filas por nombre de barrio
+# Calcular la matriz de distancias
+matriz_clustering <- matriz_evaluada[order(rownames(matriz_evaluada)), ]  # Ordenar filas por nombre de barrio
 
 # Calcular el índice de Silhouette
 silhouette_result <- silhouette(as.numeric(clusters$cluster), dist(matriz_clustering))
@@ -966,7 +985,7 @@ fviz_silhouette(silhouette_result) +
 ```
 
 
-## c) PCA Funcional: También aplicamos PCA a los coeficientes funcionales y luego calculamos los clusters
+### c) PCA Funcional: También aplicamos PCA a los coeficientes funcionales y luego calculamos los clusters
 
 ```{r}
 
@@ -1046,7 +1065,7 @@ ggplot(df_pca, aes(x = PC1, y = PC2, color = cluster)) +
 
 ```
 
-### Validación de clusters nuevamente con Silhouette
+#### Validación de clusters nuevamente con Silhouette
 
 ```{r}
 library(cluster)
