@@ -3,10 +3,6 @@ title: "R Notebook"
 output: html_notebook
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code.
-
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*.
-
 ```{r}
 install.packages("openxlsx")
 # Instalar el paquete si no está instalado
@@ -37,6 +33,10 @@ summary(delitos)
 ```{r}
 dim(delitos)
 ```
+
+El dataset antes del preprocesamiento cuenta con 15 columnas y 157.461 registros correspondientes al año 2023.
+
+
 
 # 2) Preprocesamiento
 
@@ -72,6 +72,7 @@ print(conteo_por_subtipo)
 Agregamos la columna de franja horaria
 
 ```{r}
+library(dplyr)
 #Genero la columna franja(horaria)
 delitos <- delitos %>%
   mutate(
@@ -111,29 +112,7 @@ delitos <- delitos %>%
 delitos
 ```
 
-## Transformación de variables categóricas
-
-Transformamos todos los caracteres a numéricos
-
-```{r}
-
-# Convertir todas las variables categóricas (character o factor) a numéricas
-delitos <- delitos %>%
-  mutate(across(
-    .cols = where(is.character) & !all_of(c("longitud", "latitud")), 
-    .fns = ~ as.numeric(as.factor(.))
-  )) %>%
-  mutate(across(
-    .cols = where(is.factor) & !all_of(c("longitud", "latitud")), 
-    .fns = ~ as.numeric(.)
-  ))
-
-# Verificar la estructura después de la conversión
-delitos
-
-```
-
-Conversión de coordenas a númericas
+Conversión de longitud y latitud
 
 ```{r}
 # Convertir longitud y latitud a numéricas y escalarlas correctamente
@@ -147,21 +126,27 @@ delitos <- delitos %>%
 head(delitos[c("longitud", "latitud")])
 ```
 
-Eliminación de Nulos (Pero tiene que ser transformación de nulos para no perder datos, lo hacemos después)
+Eliminación de nulos y barrios que no forman parte de CABA
 
 ```{r}
+library(stringr)
 delitos <- na.omit(delitos)
 dim(delitos)
 
 delitos <- delitos %>% 
-  filter(barrio != "0")
+  filter(barrio != "0", barrio != "Sin geo", barrio != "NULL", barrio != "NO ESPECIFICADA", barrio != "GREGORIO DE LAFERRERE") %>%
+  mutate(barrio = str_replace_all(barrio, "NUNEZ", "NUÑEZ"))
+
 ```
 
 # 3) Aplicación de FDA
 
-## Hacemos la agrupación correspondiente por las variables que vamos a usar.
+Armamos la agrupación por barrio y fecha y creamos la matriz funcinal con barrios como filas y fechas como columnas
+
 ```{r}
 # Cargar librerías necesarias
+if (!require("RColorBrewer")) install.packages("RColorBrewer")
+library(RColorBrewer)
 library(dplyr)
 library(tidyr)
 library(fda.usc)
@@ -187,35 +172,237 @@ delitos_matrix <- delitos_matrix[complete.cases(delitos_matrix), ]
 variabilidad <- apply(delitos_matrix, 1, var, na.rm = TRUE)
 delitos_matrix <- delitos_matrix[variabilidad > 0.01, ]
 
-# Asegurarse de que la matriz tiene suficientes filas para clustering
-if (nrow(delitos_matrix) < 3) {
-  stop("No hay suficientes barrios con datos válidos para realizar clustering.")
-}
+
+```
+
+## a) SIN FDA: Creamos las curvas por barrio a lo largo del 2023 sin FDA.
+
+```{r}
+
+# Crear un vector de fechas reales
+fechas_date <- seq.Date(from = as.Date("2023-01-01"), by = "day", length.out = ncol(delitos_matrix))
+
+# Graficar curvas originales por barrio sin aplicar FDA
+# Crear el gráfico con dimensiones ampliadas
+png("grafico_sin_fda.png", width = 2000, height = 1200, res = 150)  # Resolución más alta
+
+# Ajustar márgenes: más espacio izquierdo para la leyenda
+par(mar = c(10, 35, 4, 4) + 0.1)  # Aumentar margen izquierdo
+
+# Crear colores únicos para cada barrio
+colores <- rainbow(nrow(delitos_matrix))
+
+# Graficar las curvas originales
+matplot(fechas_date, t(delitos_matrix), type = "l", lty = 1, col = colores, lwd = 2,
+        xlab = "Fecha", ylab = "Frecuencia", xaxt = "n",
+        main = "Curvas por Barrio (Sin suavizado)")
+
+# Crear etiquetas de fechas en el eje X
+fechas_etiquetas <- seq(min(fechas_date), max(fechas_date), by = "2 weeks")  # Mostrar cada dos semanas
+axis(1,
+     at = as.numeric(fechas_etiquetas),  # Usar fechas reales como índices
+     labels = format(fechas_etiquetas, "%d %b"),  # Día y mes
+     las = 2,  # Rotar las etiquetas
+     cex.axis = 0.8)  # Tamaño del texto en el eje Xpe
+
+# Crear una leyenda más amplia en el margen izquierdo
+legend("topright",
+       inset = c(1.2, 0),   # Más espacio hacia la izquierda
+       rownames(delitos_matrix),
+       col = colores,
+       lty = 1,
+       lwd = 4,  # Grosor de las líneas
+       ncol = 2,  # Dividir la leyenda en dos columnas
+       cex = 0.9,  # Tamaño del texto más grande
+       xpd = TRUE)  # Permitir que la leyenda esté fuera del área de dibujo
+
+# Guardar y cerrar el archivo PNG
+dev.off()
+
+# Verificar que el archivo fue creado
+browseURL("grafico_sin_fda.png")
+
+```
+
+![Curvas por Barrio (Sin FDA ni suavizado)](grafico_sin_fda.png)
+
+##  Aaplicamos clustering sobre los datos sin FDA
+
+```{r}
+dim(delitos_matrix)  # Deberías ver (n_barrio, n_fechas)
+
+delitos_matrix_normalized <- scale(delitos_matrix)
+
+library(factoextra)
+
+# Método del codo para determinar el número óptimo de clusters
+fviz_nbclust(delitos_matrix_normalized, kmeans, method = "wss") +
+  labs(title = "Método del Codo")
+
+fviz_nbclust(delitos_matrix_normalized, kmeans, method = "silhouette") +
+  labs(title = "Índice de Silhouette")
+
+```
+
+Aplicamos los clusters 
+
+```{r}
+set.seed(123)  # Para reproducibilidad
+num_clusters <- 2  # Cambia según los resultados del método del codo o Silhouette
+
+kmeans_result <- kmeans(delitos_matrix_normalized, centers = num_clusters, nstart = 20)
+
+clusters <- data.frame(
+  barrio = rownames(delitos_matrix),
+  cluster = kmeans_result$cluster
+)
+
+# Ordenar el dataframe por cluster
+clusters_ordenados <- clusters %>%
+  arrange(cluster)
+
+
+# Ver los primeros resultados
+print(clusters_ordenados)
+
+
+```
+
+Usamos PCA para graficar los clusters
+
+```{r}
+
+library(ggplot2)
+library(dplyr)
+
+# Calcular la cantidad de barrios por cluster
+cluster_sizes <- clusters %>%
+  group_by(cluster) %>%
+  summarise(n_barrios = n()) %>%
+  mutate(cluster_label = paste0("Cluster ", cluster, " (n=", n_barrios, ")"))
+
+# Convertir `cluster` a character o factor en ambos dataframes
+pca_data <- as.data.frame(pca_result$x[, 1:2])  # Tomar las dos primeras componentes
+pca_data$cluster <- as.factor(clusters$cluster)  # Convertir a factor
+
+cluster_sizes$cluster <- as.factor(cluster_sizes$cluster)  # Convertir a factor
+
+# Combinar con las etiquetas personalizadas
+pca_data <- pca_data %>%
+  left_join(cluster_sizes, by = "cluster")
+
+# Graficar PCA con leyenda personalizada
+ggplot(pca_data, aes(x = PC1, y = PC2, color = cluster_label)) +
+  geom_point(size = 3, alpha = 0.7) +  # Puntos para los barrios
+  theme_minimal() +
+  labs(
+    title = "Clusters Visualizados en el Espacio PCA",
+    x = "PC1",
+    y = "PC2",
+    color = "Cluster"
+  ) +
+  theme(legend.position = "bottom")
+
+
+```
+
+```{r}
+delitos_df <- as.data.frame(delitos_matrix) %>%
+  rownames_to_column(var = "barrio")  # Convertir rownames en columna llamada 'barrio'
+resumen_clusters <- clusters %>%
+  left_join(delitos_df, by = "barrio") %>%  # 'barrio' ya es una columna explícita
+  group_by(cluster) %>%
+  summarise_all(mean, na.rm = TRUE)
+
+print(resumen_clusters)
+
+```
+
+## Aplicamos silhouette para validar los clusters
+
+```{r}
+library(cluster)
+
+# Calcular índice de Silhouette
+silhouette_result <- silhouette(kmeans_result$cluster, dist(delitos_matrix_normalized))
+
+# Resumen del índice de Silhouette
+summary(silhouette_result)
+
+# Inspeccionar los valores del índice de Silhouette
+head(silhouette_result[, 1:3])  # Cluster, vecino más cercano, valor de Silhouette
+
+# Promedio del índice
+mean(silhouette_result[, 3])
+
+# Visualizar índice de Silhouette
+fviz_silhouette(silhouette_result) +
+  labs(title = "Índice de Silhouette por Cluster",
+       x = "Índice de Silhouette",
+       y = "Barrios")
+
+```
+
+
+##  b) CON FDA: Creamos las curvas por barrio a lo largo del 2023 con FDA.
+
+```{r}
 
 # Paso 2: Representar Datos como Curvas Funcionales con Suavizado
+
 # Crear una base B-spline penalizada para suavizar las funciones
-num_puntos <- ncol(delitos_matrix)
-rang <- c(1, num_puntos)  # Rango de las fechas representadas
-nbasis <- 20  # Ajusta el número de bases para mayor flexibilidad
+nbasis <- 25  # Ajusta el número de bases para mayor flexibilidad
 lambda <- 1e-2  # Parámetro de suavizado; menor valor = más suave
 
 # Crear la base B-spline
-basis <- create.bspline.basis(rang, nbasis = nbasis)
+basis <- create.bspline.basis(rangeval = range(fechas_date), nbasis = nbasis)
 
 # Definir el objeto de parámetros funcionales con suavizado
 fd_par <- fdPar(basis, Lfdobj = int2Lfd(2), lambda = lambda)
 
 # Convertir las filas de la matriz en funciones continuas suavizadas
-fd_obj_suavizado <- smooth.basis(seq(rang[1], rang[2]), t(delitos_matrix), fd_par)$fd
+fd_obj_suavizado <- smooth.basis(fechas_date, t(delitos_matrix), fd_par)$fd
 
 # Visualizar las funciones suavizadas por barrio antes del clustering
 colores <- rainbow(nrow(delitos_matrix))  # Generar colores únicos para cada barrio
-plot(fd_obj_suavizado, main = "Funciones Suavizadas por Barrio (Antes del Clustering)",
-     xlab = "Fecha (Índice)", ylab = "Frecuencia", col = colores, lwd = 1.5)
 
-# Agregar una leyenda para identificar los barrios
-legend("topright", legend = rownames(delitos_matrix), col = colores, lty = 1, cex = 0.5, ncol = 2)
+# Crear el gráfico con dimensiones ampliadas
+png("grafico_mejorado_legenda.png", width = 2000, height = 1200, res = 150)  # Resolución más alta
 
+# Ajustar márgenes: más espacio derecho para la leyenda
+par(mar = c(10, 4, 4, 35) + 0.1)  # Aumentar margen derecho para que la leyenda no quede cortada
+
+# Graficar las funciones suavizadas
+plot(fd_obj_suavizado, main = "Curvas por Barrio suavizadas con FDA",
+     xlab = "Fecha", ylab = "Frecuencia",
+     col = colores,
+     lwd = 2, xaxt = "n")  # Desactivar eje X predeterminado
+
+# Crear etiquetas de fechas en el eje X
+fechas_etiquetas <- seq(min(fechas_date), max(fechas_date), by = "2 weeks")  # Mostrar cada dos semanas
+axis(1,
+     at = as.numeric(fechas_etiquetas),  # Usar fechas reales como índices
+     labels = format(fechas_etiquetas, "%d %b"),  # Día y mes
+     las = 2,  # Rotar las etiquetas
+     cex.axis = 0.8)  # Tamaño del texto en el eje X
+
+# Crear una leyenda ajustada en el lado derecho del gráfico
+legend("topleft",
+       inset = c(1.1, 0),  # Reducir el espacio hacia la derecha
+       legend = rownames(delitos_matrix),
+       col = colores,
+       lty = 1,
+       lwd = 4,  # Grosor de las líneas
+       ncol = 2,  # Dividir la leyenda en dos columnas
+       cex = 0.9,  # Tamaño del texto ajustado
+       xpd = TRUE)  # Permitir que la leyenda esté fuera del área de dibujo
+
+
+# Guardar y cerrar el archivo PNG
+dev.off()
+
+# Verificar que el archivo fue creado
+browseURL("grafico_mejorado_legenda.png")
 
 # Paso 3: Clustering Funcional con K-Means
 # Determinar el número óptimo de clusters con el método del codo
@@ -224,174 +411,272 @@ wss <- sapply(2:10, function(k) {
   kmeans(fd_obj_suavizado$coefs, centers = k, nstart = 20)$tot.withinss
 })
 
+```
+
+![Curvas por Barrio suavizada con FDA)](grafico_mejorado_legenda.png)
+
+## Graficamos el método de codo y silhouette para definir el número de clusters
+
+```{r}
 # Graficar el método del codo
 plot(2:10, wss, type = "b", pch = 19, frame = FALSE,
      xlab = "Número de Clusters", ylab = "Suma de Errores al Cuadrado (WSS)",
      main = "Método del Codo para Clustering Funcional")
 
 # Elegir un número de clusters (por ejemplo, 3)
-num_clusters <- 3
+num_clusters <- 2
 kmeans_result <- kmeans(fd_obj_suavizado$coefs, centers = num_clusters, nstart = 20)
 
+fviz_nbclust(fd_obj_suavizado$coefs, kmeans, method = "silhouette") +
+  labs(title = "Índice de Silhouette")
 ```
+
+## Definimos los clusters correspondientes
 
 ```{r}
 
-# Validar que no haya valores faltantes en delitos_matrix
-if (any(is.na(delitos_matrix))) {
-  stop("Hay valores faltantes en 'delitos_matrix' después de la preparación.")
-}
-
-# Validar la variabilidad de las filas
-variabilidad <- apply(delitos_matrix, 1, var, na.rm = TRUE)
-if (any(variabilidad == 0)) {
-  warning("Se eliminarán filas con variabilidad cero en 'delitos_matrix'.")
-  delitos_matrix <- delitos_matrix[variabilidad > 0, ]
-}
+fd_transposed <- t(fd_obj_suavizado$coefs)
 
 # Aplicar kmeans funcional con manejo de clusters pequeños
-set.seed(123)
-num_clusters <- 3  # Cambiar según necesidad
+num_clusters <- 2  # Cambiar según necesidad
 
-kmeans_result = kmeans.fd(fd_obj_suavizado, ncl = num_clusters, min.cluster.size = 3)
-  
+# Aplicar clustering funcional
+kmeans_result <- kmeans(t(fd_obj_suavizado$coefs), centers = num_clusters, nstart = 20)
+
+```
+
+## Graficamos los clusters 
+
+
+```{r}
+
 # Asignar clusters a los barrios
+# Crear el dataframe con los barrios y los clusters asignados
 clusters <- data.frame(
-  barrio = rownames(delitos_matrix),
-  cluster = kmeans_result$cluster
+  barrio = colnames(fd_obj_suavizado$coefs),  # Nombres de los barrios
+  cluster = kmeans_result$cluster               # Clusters asignados
 )
 
-# Visualización de Clusters
-df_curves <- as.data.frame(t(eval.fd(seq(rang[1], rang[2]), fd_obj_suavizado))) %>%
+# Evaluar las curvas funcionales
+matriz_evaluada <- t(eval.fd(fechas_date, fd_obj_suavizado))  # Evaluar en fechas_date
+
+# Asignar las fechas como nombres de las columnas
+colnames(matriz_evaluada) <- as.character(fechas_date)  # Convertir fechas a texto
+
+
+# Actualizar etiquetas de los clusters con los tamaños
+df_curves <- as.data.frame(matriz_evaluada) %>%
   rownames_to_column("barrio") %>%
   pivot_longer(-barrio, names_to = "fecha", values_to = "frecuencia") %>%
-  mutate(cluster = factor(clusters$cluster[match(barrio, clusters$barrio)]))
+  mutate(
+    fecha = as.Date(fecha),  # Convertir texto a objeto Date
+    cluster = factor(clusters$cluster[match(barrio, clusters$barrio)])
+  )
 
-ggplot(df_curves, aes(x = as.numeric(fecha), y = frecuencia, group = barrio, color = cluster)) +
-  geom_line(alpha = 0.7) +
-  theme_minimal() +
-  labs(title = "Clustering Funcional por Barrio", x = "Fecha (Índice)", y = "Frecuencia", color = "Cluster") +
-  theme(legend.position = "bottom")
 
-# Añadir tamaño de cluster al gráfico
-cluster_sizes <- table(clusters$cluster)
-ggplot(df_curves, aes(x = as.numeric(fecha), y = frecuencia, group = barrio, color = cluster)) +
+# Calcular cantidad de barrios únicos por cluster
+cluster_sizes <- df_curves %>%
+  group_by(cluster) %>%
+  summarise(n_barrios = n_distinct(barrio))  # Contar barrios únicos
+
+df_curves <- df_curves %>%
+  left_join(cluster_sizes, by = "cluster") %>%  # Agregar tamaños al dataframe
+  mutate(cluster_label = paste0("Cluster ", cluster, " (n=", n_barrios, ")"))  # Etiquetas personalizadas
+
+
+ggplot(df_curves, aes(x = fecha, y = frecuencia, group = barrio, color = cluster_label)) +
   geom_line(alpha = 0.7) +
   theme_minimal() +
   labs(
     title = "Clustering Funcional por Barrio",
-    x = "Fecha (Índice)",
+    x = "Fecha",
     y = "Frecuencia",
     color = "Cluster"
   ) +
+  theme(legend.position = "bottom")
+
+
+# Crear la tabla con los barrios por cluster
+tabla_barrios <- df_curves %>%
+  dplyr::select(barrio, cluster_label) %>%  # Seleccionar columnas necesarias
+  distinct() %>%                     # Eliminar duplicados
+  arrange(cluster_label, barrio)     # Ordenar por cluster y barrio
+
+print(tabla_barrios)
+
+```
+
+## Graficamos las curvas promedios por cluster 
+
+```{r}
+# Calcular la frecuencia promedio por cluster y fecha
+df_avg <- df_curves %>%
+  group_by(cluster_label, fecha) %>%
+  summarise(frecuencia_promedio = mean(frecuencia), .groups = "drop")
+
+ggplot() +
+  # Curvas individuales
+  geom_line(data = df_curves, aes(x = fecha, y = frecuencia, group = barrio, color = cluster_label), alpha = 0.4) +
+  # Curvas promedio por cluster
+  geom_line(data = df_avg, aes(x = fecha, y = frecuencia_promedio, group = cluster_label, color = cluster_label), size = 1.5) +
+  theme_minimal() +
+  labs(
+    title = "Clustering Funcional por Barrio con Curvas Promedio",
+    x = "Fecha",
+    y = "Frecuencia",
+    color = "Cluster"
+  ) +
+  theme(legend.position = "bottom")
+
+```
+
+## Validación de clusters con Silhouette
+
+```{r}
+if (!require("cluster")) install.packages("cluster")
+if (!require("factoextra")) install.packages("factoextra")
+library(cluster)
+library(factoextra)
+
+# Asegurar que los clusters coinciden con la matriz
+clusters <- df_curves %>%
+  distinct(barrio, cluster) %>%
+  arrange(barrio)  # Ordenar por barrio para garantizar coincidencia
+
+matriz_clustering <- matriz_clustering[order(rownames(matriz_clustering)), ]  # Ordenar filas por nombre de barrio
+
+# Calcular el índice de Silhouette
+silhouette_result <- silhouette(as.numeric(clusters$cluster), dist(matriz_clustering))
+
+# Resumen del índice de Silhouette
+summary(silhouette_result)
+
+# Inspeccionar los valores del índice de Silhouette
+head(silhouette_result[, 1:3])  # Cluster, vecino más cercano, valor de Silhouette
+
+# Promedio del índice
+mean(silhouette_result[, 3])
+
+# Visualizar Silhouette
+fviz_silhouette(silhouette_result) +
+  labs(title = "Índice de Silhouette por Cluster",
+       x = "Índice de Silhouette",
+       y = "Barrios") +
+  theme_minimal()
+
+
+```
+
+
+## c) PCA Funcional: También aplicamos PCA a los coeficientes funcionales y luego calculamos los clusters
+
+```{r}
+
+# Paso 2: Extraer los coeficientes funcionales
+coeficientes <- t(fd_obj_suavizado$coefs)
+
+# Paso 3: Aplicar PCA a los coeficientes funcionales
+pca_result <- prcomp(coeficientes, center = TRUE, scale. = TRUE)  # Normalizar para PCA
+
+# Explorar la varianza explicada por las componentes principales
+varianza_explicada <- cumsum(pca_result$sdev^2) / sum(pca_result$sdev^2) * 100
+print(varianza_explicada)  # Ver proporción de varianza explicada
+
+# Elegir el número de componentes principales
+num_componentes <- 2  # Cambiar según necesidad (e.g., varianza explicada > 80%)
+scores_pca <- pca_result$x[, 1:num_componentes]  # Tomar los scores de las componentes seleccionadas
+
+
+# Paso 4: Aplicar k-means usando los scores de PCA
+set.seed(123)  # Para reproducibilidad
+num_clusters <- 2  # Cambiar según necesidad
+kmeans_result <- kmeans(scores_pca, centers = num_clusters, nstart = 20)
+
+# Ver los clusters asignados
+clusters <- data.frame(
+  barrio = colnames(fd_obj_suavizado$coefs),
+  cluster = kmeans_result$cluster
+)
+
+# Ordenar el dataframe por cluster
+clusters_ordenados <- clusters %>%
+  arrange(cluster)
+
+
+# Ver los primeros resultados
+print(clusters_ordenados)
+
+library(ggplot2)
+
+# Crear un dataframe con las dos primeras componentes principales y los clusters
+df_pca <- as.data.frame(scores_pca)  # Convertir los scores seleccionados a dataframe
+df_pca$cluster <- as.factor(kmeans_result$cluster)  # Agregar los clusters asignados
+df_pca$barrio <- colnames(fd_obj_suavizado$coefs)  # Agregar nombres de los barrios
+
+library(ggplot2)
+library(dplyr)
+
+# Calcular la cantidad de barrios por cluster
+cluster_sizes <- df_pca %>%
+  group_by(cluster) %>%
+  summarise(n_barrios = n())  # Contar barrios por cluster
+
+# Crear etiquetas personalizadas para la leyenda
+cluster_labels <- cluster_sizes %>%
+  mutate(cluster_label = paste0("Cluster ", cluster, " (n=", n_barrios, ")")) %>%
+  pull(cluster_label)  # Extraer etiquetas como vector
+
+# Mapear las etiquetas a los clusters
+names(cluster_labels) <- cluster_sizes$cluster  # Asignar etiquetas por número de cluster
+
+# Graficar los clusters en el espacio PCA con las etiquetas personalizadas
+ggplot(df_pca, aes(x = PC1, y = PC2, color = cluster)) +
+  geom_point(size = 3, alpha = 0.7) +  # Representar los puntos
+  theme_minimal() +
+  labs(
+    title = "Clusters Visualizados en el Espacio PCA",
+    x = "Componente Principal 1",
+    y = "Componente Principal 2",
+    color = "Cluster"
+  ) +
   theme(legend.position = "bottom") +
-  scale_color_discrete(labels = paste0("Cluster ", names(cluster_sizes), " (n=", cluster_sizes, ")"))
+  scale_color_manual(
+    values = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a"),  # Colores personalizados
+    labels = cluster_labels  # Etiquetas con la cantidad de barrios
+  )
 
 
 ```
 
-## Creamos la variable indendiente y las matrices correspondientes
+## Validación de clusters nuevamente con Silhouette
 
 ```{r}
-# Crear la respuesta (frecuencia de delitos por día)
-Y <- delitos_frecuencia$frecuencia
+library(cluster)
+library(factoextra)
 
-# Crear una matriz funcional para 'tipo'
-# n_puntos <- 10  # Número de puntos funcionales
-# tipo_matrix <- matrix(rep(delitos_agrupados$tipo_promedio, each = n_puntos), 
-#                      nrow = nrow(delitos_agrupados), 
-#                      ncol = n_puntos)
+# Calcular la matriz de distancias usando los scores PCA
+dist_pca <- dist(df_pca[, c("PC1", "PC2")])
 
-# Crear una matriz funcional para 'franja_horaria'
-# franja_horaria_matrix <- matrix(rep(delitos_agrupados$franja_horaria_promedio, each = n_puntos), 
-#                                nrow = nrow(delitos_agrupados), 
-#                                ncol = n_puntos)
+# Calcular el índice de Silhouette
+silhouette_result <- silhouette(as.numeric(df_pca$cluster), dist_pca)
 
-# Verificar dimensiones
-print(length(Y))  # Longitud de Y
-print(dim(franja_horaria_matrix))  # Dimensiones de tipo_matrix
-
-n_fechas <- length(unique(delitos$fecha))
-n_franjas <- length(unique(delitos$franja))
-
-cat("Dimensiones esperadas de franja_horaria_matrix:", n_fechas, "x", n_franjas, "\n")
-cat("Dimensiones reales:", dim(franja_horaria_matrix), "\n")
+# Ver un resumen del índice de Silhouette
+summary(silhouette_result)
 
 
-```
-
-## Creamos el modelo con tipo de delito
-
-```{r}
-# Ajustar el modelo funcional con 'tipo' como predictora funcional
-modelo_refund_tipo <- pfr(
-  Y ~ lf(franja_horaria_matrix, bs = "ps"),  # lf() para predictoras funcionales
-  data = delitos_agrupados
-)
-
-# Resumen del modelo
-summary(modelo_refund_tipo)
-
-# Visualizar el efecto funcional
-plot(modelo_refund_tipo, main = "Efecto Funcional de Franja", 
-     xlab = "Dominio (Puntos Funcionales)", ylab = "Efecto")
+# Promedio del índice de Silhouette
+silhouette_avg <- mean(silhouette_result[, 3])
+print(paste("Índice de Silhouette promedio:", round(silhouette_avg, 3)))
 
 
+# Visualizar el índice de Silhouette
+fviz_silhouette(silhouette_result) +
+  labs(
+    title = "Índice de Silhouette para Clusters en PCA",
+    x = "Índice de Silhouette",
+    y = "Barrios"
+  ) +
+  theme_minimal()
 
 ```
-# Creamos el modelo mixto con tipo y franja horaria
-
-```{r}
-# Ajustar un modelo funcional con múltiples predictoras funcionales
-modelo_refund_mixto <- pfr(
-  Y ~ lf(tipo_delito_matrix, bs = "ps") + lf(franja_horaria_matrix, bs = "ps"),
-  data = delitos_agrupados
-)
-
-# Resumen del modelo mixto
-summary(modelo_refund_mixto)
-
-# Visualizar los efectos funcionales de las predictoras
-plot(modelo_refund_mixto, main = "Efectos Funcionales de las Predictoras", pages = 1)
-
-
-```
-
-
-# Calculamos las métricas de la predicción
-```{r}
-# Generar predicciones del modelo mixto
-# Predicciones del modelo
-predicciones <- predict(modelo_refund_mixto)
-
-# Valores reales (frecuencia de delitos)
-valores_reales <- Y
-
-# Calcular MAE
-mae <- mean(abs(valores_reales - predicciones))
-
-# Calcular MSE
-mse <- mean((valores_reales - predicciones)^2)
-
-# Calcular RMSE
-rmse <- sqrt(mse)
-
-# Calcular R^2
-sse <- sum((valores_reales - predicciones)^2)  # Suma de errores al cuadrado
-sst <- sum((valores_reales - mean(valores_reales))^2)  # Suma total de cuadrados
-r2 <- 1 - (sse / sst)
-
-# Mostrar las métricas
-cat("MAE:", mae, "\n")
-cat("MSE:", mse, "\n")
-cat("RMSE:", rmse, "\n")
-cat("R^2:", r2, "\n")
-
-# Graficar predicciones vs valores reales
-plot(Y, predicciones, main = "Predicciones vs Valores Reales (Modelo Mixto)",
-     xlab = "Valores Reales", ylab = "Predicciones", col = "blue")
-abline(0, 1, col = "red")
-
-```
-
 
