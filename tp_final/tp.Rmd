@@ -1,23 +1,20 @@
 ---
-title: "R Notebook"
+title: "Trabajo Práctico final EEA-2024"
 output: html_notebook
 ---
 
 ```{r}
-install.packages("openxlsx")
 # Instalar el paquete si no está instalado
+if (!require("openxlsx")) install.packages("openxlsx")
 if (!require("dplyr")) install.packages("dplyr")
 # Cargar el paquete
 library(dplyr)
 ```
 
-# Trabajo Práctico Final
-
 # 1) Fuente de datos
 
 ## Carga el dataset
 
-.
 
 ```{r}
 library(openxlsx)
@@ -247,7 +244,7 @@ print(grafico_horas)
 
 ## Transformación de variables categóricas
 
-Transformamos todos los caracteres a numéricos, arreglo para no sobreescribir, exceptuando moto,arma,lat,long
+Transformamos todos los caracteres a numéricos, exceptuando moto,arma,lat,long
 
 ```{r}
 library(dplyr)
@@ -321,7 +318,7 @@ ggplot(delitos_temporal_h, aes(x = franja, y = total_delitos, color = tipo, grou
 ```
 
 
-### Frecuencia de Delitos por Barrio y Tipo (Top 15)
+### Frecuencia de Delitos por Barrio y Tipo 
 ```{r}
 library(ggplot2)
 library(dplyr)
@@ -400,6 +397,150 @@ ggplot(delitos_por_estacion, aes(x = estacion, y = total, fill = estacion)) +
 
 # 3) Aplicación de FDA
 
+## A) Frencuencia de delitos agrupados por franja (24) y fecha
+
+```{r}
+# Cargar librerías necesarias
+if (!require("RColorBrewer")) install.packages("RColorBrewer")
+library(RColorBrewer)
+library(dplyr)
+library(tidyr)
+library(fda.usc)
+library(fda)
+library(ggplot2)
+library(ggrepel)
+library(tibble)  # Para usar column_to_rownames
+
+
+# Agrupar por día y horario, y contar la frecuencia de delitos
+delitos_por_dia_horario <- delitos %>%
+  group_by(franja, fecha) %>%  # 'franja_horaria' representa los horarios
+  summarise(frecuencia = sum(cantidad, na.rm = TRUE), .groups = "drop")
+
+# Crear una matriz con filas como días y columnas como franjas horarias
+delitos_franja_matrix <- delitos_por_dia_horario %>%
+  pivot_wider(names_from = fecha, values_from = frecuencia, values_fill = 0) %>%
+  column_to_rownames(var = "franja") %>%
+  as.matrix()
+
+delitos_franja_matrix <- delitos_franja_matrix[complete.cases(delitos_franja_matrix), ]
+
+```
+
+### a) SIN FDA: Creamos las curvas por franja a lo largo del 2023 sin FDA.
+
+```{r}
+
+# Crear un vector de fechas reales
+fechas_date <- seq.Date(from = as.Date("2023-01-01"), by = "day", length.out = ncol(delitos_franja_matrix))
+
+# Crear colores únicos para cada barrio
+colores <- rainbow(nrow(delitos_franja_matrix))
+
+
+# Crear el gráfico con dimensiones ampliadas
+png("grafico_franjas_sin_fda.png", width = 2000, height = 1200, res = 150)  # Resolución más alta
+
+# Ajustar márgenes: más espacio derecho para la leyenda
+par(mar = c(10, 35, 4, 4) + 0.1)  # Aumentar margen izquierdo
+
+# Graficar las curvas originales
+matplot(fechas_date, t(delitos_franja_matrix), type = "l", lty = 1, col = colores, lwd = 2,
+        xlab = "Fecha", ylab = "Frecuencia", xaxt = "n",
+        main = "Curvas por Franja (Sin suavizado)")
+
+# Crear etiquetas de fechas en el eje X
+fechas_etiquetas <- seq(min(fechas_date), max(fechas_date), by = "2 weeks")  # Mostrar cada dos semanas
+axis(1,
+     at = as.numeric(fechas_etiquetas),  # Usar fechas reales como índices
+     labels = format(fechas_etiquetas, "%d %b"),  # Día y mes
+     las = 2,  # Rotar las etiquetas
+     cex.axis = 0.8)  # Tamaño del texto en el eje Xpe
+
+# Crear una leyenda más amplia en el margen izquierdo
+legend("topright",
+       inset = c(1.2, 0),   # Más espacio hacia la izquierda
+       rownames(delitos_franja_matrix),
+       col = colores,
+       lty = 1,
+       lwd = 4,  # Grosor de las líneas
+       ncol = 2,  # Dividir la leyenda en dos columnas
+       cex = 0.9,  # Tamaño del texto más grande
+       xpd = TRUE)  # Permitir que la leyenda esté fuera del área de dibujo
+
+# Guardar y cerrar el archivo PNG
+dev.off()
+
+# Verificar que el archivo fue creado
+browseURL("grafico_franjas_sin_fda.png")
+```
+![Curvas por Franja Sin FDA ni suavizado](grafico_franjas_sin_fda.png)
+
+### b) CON FDA: Creamos las curvas por franja a lo largo del 2023 con FDA.
+
+```{r}
+# Paso 2: Representar Datos como Curvas Funcionales con Suavizado
+
+# Crear una base B-spline penalizada para suavizar las funciones
+nbasis <- 25  # Ajusta el número de bases para mayor flexibilidad
+lambda <- 1e-2  # Parámetro de suavizado; menor valor = más suave
+
+# Crear la base B-spline
+basis <- create.bspline.basis(rangeval = range(fechas_date), nbasis = nbasis)
+
+# Definir el objeto de parámetros funcionales con suavizado
+fd_par <- fdPar(basis, Lfdobj = int2Lfd(2), lambda = lambda)
+
+# Convertir las filas de la matriz en funciones continuas suavizadas
+fd_obj_suavizado <- smooth.basis(fechas_date, t(delitos_franja_matrix), fd_par)$fd
+
+# Visualizar las funciones suavizadas por barrio antes del clustering
+colores <- rainbow(nrow(delitos_franja_matrix))  # Generar colores únicos para cada barrio
+
+# Crear el gráfico con dimensiones ampliadas
+png("grafico_franjas_con_fda.png", width = 2000, height = 1200, res = 150)  # Resolución más alta
+
+# Ajustar márgenes: más espacio derecho para la leyenda
+par(mar = c(10, 4, 4, 35) + 0.1)  # Aumentar margen derecho para que la leyenda no quede cortada
+
+# Graficar las funciones suavizadas
+plot(fd_obj_suavizado, main = "Curvas por Franja suavizadas con FDA",
+     xlab = "Fecha", ylab = "Frecuencia",
+     col = colores,
+     lwd = 2, xaxt = "n")  # Desactivar eje X predeterminado
+
+# Crear etiquetas de fechas en el eje X
+fechas_etiquetas <- seq(min(fechas_date), max(fechas_date), by = "2 weeks")  # Mostrar cada dos semanas
+axis(1,
+     at = as.numeric(fechas_etiquetas),  # Usar fechas reales como índices
+     labels = format(fechas_etiquetas, "%d %b"),  # Día y mes
+     las = 2,  # Rotar las etiquetas
+     cex.axis = 0.8)  # Tamaño del texto en el eje X
+
+# Crear una leyenda ajustada en el lado derecho del gráfico
+legend("topleft",
+       inset = c(1.1, 0),  # Reducir el espacio hacia la derecha
+       legend = rownames(delitos_franja_matrix),
+       col = colores,
+       lty = 1,
+       lwd = 4,  # Grosor de las líneas
+       ncol = 2,  # Dividir la leyenda en dos columnas
+       cex = 0.9,  # Tamaño del texto ajustado
+       xpd = TRUE)  # Permitir que la leyenda esté fuera del área de dibujo
+
+
+# Guardar y cerrar el archivo PNG
+dev.off()
+
+# Verificar que el archivo fue creado
+browseURL("grafico_franjas_con_fda.png")
+
+```
+
+![Curvas por Franja suavizadas con FDA](grafico_franjas_con_fda.png)
+
+## B) Frencuencia de delitos agrupados por barrio (48) y fecha
+
 Armamos la agrupación por barrio y fecha y creamos la matriz funcinal con barrios como filas y fechas como columnas
 
 ```{r}
@@ -434,7 +575,7 @@ delitos_matrix <- delitos_matrix[variabilidad > 0.01, ]
 
 ```
 
-## a) SIN FDA: Creamos las curvas por barrio a lo largo del 2023 sin FDA.
+### a) SIN FDA: Creamos las curvas por barrio a lo largo del 2023 sin FDA.
 
 ```{r}
 
@@ -443,7 +584,7 @@ fechas_date <- seq.Date(from = as.Date("2023-01-01"), by = "day", length.out = n
 
 # Graficar curvas originales por barrio sin aplicar FDA
 # Crear el gráfico con dimensiones ampliadas
-png("grafico_sin_fda.png", width = 2000, height = 1200, res = 150)  # Resolución más alta
+png("grafico_barrios_sin_fda.png", width = 2000, height = 1200, res = 150)  # Resolución más alta
 
 # Ajustar márgenes: más espacio izquierdo para la leyenda
 par(mar = c(10, 35, 4, 4) + 0.1)  # Aumentar margen izquierdo
@@ -479,13 +620,13 @@ legend("topright",
 dev.off()
 
 # Verificar que el archivo fue creado
-browseURL("grafico_sin_fda.png")
+browseURL("grafico_barrios_sin_fda.png")
 
 ```
 
-![Curvas por Barrio (Sin FDA ni suavizado)](grafico_sin_fda.png)
+![Curvas por Barrio (Sin FDA ni suavizado)](grafico_barrios_sin_fda.png)
 
-##  Aaplicamos clustering sobre los datos sin FDA
+### Graficamos el método de codo y silhouette para definir el número de clusters
 
 ```{r}
 dim(delitos_matrix)  # Deberías ver (n_barrio, n_fechas)
@@ -502,8 +643,6 @@ fviz_nbclust(delitos_matrix_normalized, kmeans, method = "silhouette") +
   labs(title = "Índice de Silhouette")
 
 ```
-
-Aplicamos los clusters 
 
 ```{r}
 set.seed(123)  # Para reproducibilidad
@@ -577,7 +716,7 @@ print(resumen_clusters)
 
 ```
 
-## Aplicamos silhouette para validar los clusters
+### Aplicamos silhouette para validar los clusters
 
 ```{r}
 library(cluster)
@@ -603,7 +742,7 @@ fviz_silhouette(silhouette_result) +
 ```
 
 
-##  b) CON FDA: Creamos las curvas por barrio a lo largo del 2023 con FDA.
+## b) CON FDA: Creamos las curvas por barrio a lo largo del 2023 con FDA.
 
 ```{r}
 
@@ -626,7 +765,7 @@ fd_obj_suavizado <- smooth.basis(fechas_date, t(delitos_matrix), fd_par)$fd
 colores <- rainbow(nrow(delitos_matrix))  # Generar colores únicos para cada barrio
 
 # Crear el gráfico con dimensiones ampliadas
-png("grafico_mejorado_legenda.png", width = 2000, height = 1200, res = 150)  # Resolución más alta
+png("grafico_barrios_con_fda.png", width = 2000, height = 1200, res = 150)  # Resolución más alta
 
 # Ajustar márgenes: más espacio derecho para la leyenda
 par(mar = c(10, 4, 4, 35) + 0.1)  # Aumentar margen derecho para que la leyenda no quede cortada
@@ -661,7 +800,7 @@ legend("topleft",
 dev.off()
 
 # Verificar que el archivo fue creado
-browseURL("grafico_mejorado_legenda.png")
+browseURL("grafico_barrios_con_fda.png")
 
 # Paso 3: Clustering Funcional con K-Means
 # Determinar el número óptimo de clusters con el método del codo
@@ -672,9 +811,9 @@ wss <- sapply(2:10, function(k) {
 
 ```
 
-![Curvas por Barrio suavizada con FDA)](grafico_mejorado_legenda.png)
+![Curvas por Barrio suavizada con FDA)](grafico_barrios_con_fda.png)
 
-## Graficamos el método de codo y silhouette para definir el número de clusters
+### Graficamos el método de codo y silhouette para definir el número de clusters
 
 ```{r}
 # Graficar el método del codo
@@ -690,7 +829,7 @@ fviz_nbclust(fd_obj_suavizado$coefs, kmeans, method = "silhouette") +
   labs(title = "Índice de Silhouette")
 ```
 
-## Definimos los clusters correspondientes
+### Definimos los clusters correspondientes
 
 ```{r}
 
@@ -704,7 +843,7 @@ kmeans_result <- kmeans(t(fd_obj_suavizado$coefs), centers = num_clusters, nstar
 
 ```
 
-## Graficamos los clusters 
+### Graficamos los clusters 
 
 
 ```{r}
@@ -765,7 +904,7 @@ print(tabla_barrios)
 
 ```
 
-## Graficamos las curvas promedios por cluster 
+### Graficamos las curvas promedios por cluster 
 
 ```{r}
 # Calcular la frecuencia promedio por cluster y fecha
@@ -789,7 +928,7 @@ ggplot() +
 
 ```
 
-## Validación de clusters con Silhouette
+### Validación de clusters con Silhouette
 
 ```{r}
 if (!require("cluster")) install.packages("cluster")
@@ -907,7 +1046,7 @@ ggplot(df_pca, aes(x = PC1, y = PC2, color = cluster)) +
 
 ```
 
-## Validación de clusters nuevamente con Silhouette
+### Validación de clusters nuevamente con Silhouette
 
 ```{r}
 library(cluster)
