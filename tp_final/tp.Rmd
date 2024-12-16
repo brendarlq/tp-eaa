@@ -152,111 +152,7 @@ delitos <- delitos %>%
 
 ```
 
-Luego de la limpieza quedaron un total de 155505 y 18 atributos, ya que agregamos 3 variables adicionales: franja_horaria, dia y estacion
-
-## Gráficos exploratorios
-
-### Distribución de Delitos por Tipo y Mes
-```{r}
-library(ggplot2)
-library(dplyr)
-
-# Agrupar los datos
-delitos_agrupados_tipo <- delitos %>%
-  group_by(mes, tipo) %>%
-  summarise(total = n(), .groups = "drop")
-
-# Crear el gráfico sin números
-grafico_apilado <- ggplot(delitos_agrupados_tipo, aes(x = mes, y = total, fill = tipo)) +
-  geom_bar(stat = "identity", position = "stack") +
-  facet_wrap(~ tipo, scales = "free_y") +  # Dividir por tipo de delito
-  labs(
-    title = "Distribución de Delitos por Tipo y Mes",
-    x = "Mes",
-    y = "Número de Delitos"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "bottom",
-    strip.text = element_text(size = 12),  # Tamaño del título de cada faceta
-    plot.title = element_text(hjust = 0.5),  # Centrar el título
-    legend.text = element_text(size = 10),  # Ajustar tamaño de texto de la leyenda
-    legend.key.size = unit(0.8, "cm")  # Tamaño de las cajas de la leyenda
-  ) +
-  scale_fill_brewer(palette = "Set3")  # Paleta de colores diferenciados
-
-# Mostrar el gráfico
-print(grafico_apilado)
-
-```
-
-### Distribución de Delitos por Tipo y Franja Horaria
-
-```{r}
-library(ggplot2)
-library(dplyr)
-
-# Agrupar los datos por franja horaria, tipo y subtipo
-delitos_agrupados_horario <- delitos %>%
-  group_by(franja, tipo) %>%
-  summarise(total = n(), .groups = "drop")
-
-# Crear el gráfico apilado por franja horaria
-grafico_horarios <- ggplot(delitos_agrupados_horario, aes(x = franja, y = total, fill = tipo)) +
-  geom_bar(stat = "identity", position = "stack") +
-  facet_wrap(~ tipo, scales = "free_y") +  # Dividir por tipo de delito
-  labs(
-    title = "Distribución de Delitos por Tipo y Franja Horaria",
-    x = "Franja Horaria",
-    y = "Número de Delitos"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "bottom",
-    strip.text = element_text(size = 12),  # Tamaño del título de cada faceta
-    plot.title = element_text(hjust = 0.5),  # Centrar el título
-    legend.text = element_text(size = 10),  # Ajustar tamaño de texto de la leyenda
-    legend.key.size = unit(0.8, "cm")  # Tamaño de las cajas de la leyenda
-  ) +
-  scale_fill_brewer(palette = "Set3")  # Paleta de colores diferenciados
-
-# Mostrar el gráfico
-print(grafico_horarios)
-
-```
-```{r}
-library(ggplot2)
-library(dplyr)
-
-# Agrupar los datos por franja horaria
-delitos_por_hora <- delitos %>%
-  group_by(franja) %>%
-  summarise(total = n(), .groups = "drop")
-
-# Crear el gráfico de barras
-grafico_horas <- ggplot(delitos_por_hora, aes(x = franja, y = total)) +
-  geom_bar(stat = "identity", fill = "steelblue", color = "black", width = 0.7) +
-  labs(
-    title = "Distribución de Delitos por Hora",
-    x = "Hora del Día",
-    y = "Número de Delitos"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    plot.title = element_text(hjust = 0.5),
-    panel.grid.major = element_line(size = 0.5, linetype = "dotted"),
-    panel.grid.minor = element_blank()
-  )
-
-# Mostrar el gráfico
-print(grafico_horas)
-
-```
-
-
+Luego de la limpieza quedaron un total de 154521 y 18 atributos, ya que agregamos 3 variables adicionales: franja_horaria, dia y estacion
 
 ## Transformación de variables categóricas
 
@@ -290,7 +186,121 @@ str(del)
 
 ```
 
-### Evolución Temporal de Delitos por Tipo
+
+# 3) Gráficos exploratorios
+
+## Distribución de delitos por Tipo y Mes
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Definir el orden correcto de los meses como factor
+orden_meses <- c("enero", "febrero", "marzo", "abril", "mayo", "junio", 
+                 "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+
+# Convertir la columna 'mes' a factor con el orden correcto
+del$mes <- factor(tolower(del$mes), levels = orden_meses)
+
+# Agrupar los datos
+delitos_agrupados_tipo <- del %>%
+  group_by(mes, tipo) %>%
+  summarise(total = n(), .groups = "drop")
+
+# Crear el gráfico con meses ordenados
+grafico_apilado <- ggplot(delitos_agrupados_tipo, aes(x = mes, y = total, fill = tipo)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_wrap(~ tipo, scales = "free_y") +  # Dividir por tipo de delito
+  labs(
+    title = "Distribución de delitos por Tipo y Mes",
+    x = "Mes",
+    y = "Número de Delitos"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom",
+    strip.text = element_text(size = 12),
+    plot.title = element_text(hjust = 0.5),
+    legend.text = element_text(size = 10),
+    legend.key.size = unit(0.8, "cm")
+  ) +
+  scale_fill_brewer(palette = "Set3")
+
+# Mostrar el gráfico
+print(grafico_apilado)
+
+```
+
+## Distribución de delitos por Tipo y Franja Horaria
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Agrupar los datos por franja horaria, tipo y subtipo
+delitos_agrupados_horario <- delitos %>%
+  group_by(franja, tipo) %>%
+  summarise(total = n(), .groups = "drop")
+
+# Crear el gráfico apilado por franja horaria
+grafico_horarios <- ggplot(delitos_agrupados_horario, aes(x = franja, y = total, fill = tipo)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_wrap(~ tipo, scales = "free_y") +  # Dividir por tipo de delito
+  labs(
+    title = "Distribución de delitos por Tipo y Franja Horaria",
+    x = "Franja Horaria",
+    y = "Número de Delitos"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom",
+    strip.text = element_text(size = 12),  # Tamaño del título de cada faceta
+    plot.title = element_text(hjust = 0.5),  # Centrar el título
+    legend.text = element_text(size = 10),  # Ajustar tamaño de texto de la leyenda
+    legend.key.size = unit(0.8, "cm")  # Tamaño de las cajas de la leyenda
+  ) +
+  scale_fill_brewer(palette = "Set3")  # Paleta de colores diferenciados
+
+# Mostrar el gráfico
+print(grafico_horarios)
+
+```
+
+## Frecuencia de delitos por Hora
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Agrupar los datos por franja horaria
+delitos_por_hora <- delitos %>%
+  group_by(franja) %>%
+  summarise(total = n(), .groups = "drop")
+
+# Crear el gráfico de barras
+grafico_horas <- ggplot(delitos_por_hora, aes(x = franja, y = total)) +
+  geom_bar(stat = "identity", fill = "steelblue", color = "black", width = 0.7) +
+  labs(
+    title = "Distribución de delitos por Hora",
+    x = "Hora del Día",
+    y = "Número de Delitos"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5),
+    panel.grid.major = element_line(size = 0.5, linetype = "dotted"),
+    panel.grid.minor = element_blank()
+  )
+
+# Mostrar el gráfico
+print(grafico_horas)
+
+```
+
+
+## Evolución temporal de delitos por Tipo por Mes
 
 ```{r}
 library(ggplot2)
@@ -305,7 +315,7 @@ delitos_temporal <- del %>%
 ggplot(delitos_temporal, aes(x = mes_cod, y = total_delitos, color = tipo, group = tipo)) +
   geom_line(size = 1) +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
-  labs(title = "Evolución Temporal de Delitos por Tipo por mes",
+  labs(title = "Evolución temporal de delitos por Tipo por Mes",
        x = "Mes",
        y = "Número de Delitos",
        color = "Tipo de Delito") +
@@ -313,28 +323,39 @@ ggplot(delitos_temporal, aes(x = mes_cod, y = total_delitos, color = tipo, group
 
 ```
 
-### Evolución Temporal de Delitos por Tipo
+## Evolución temporal de delitos por Tipo y Franja horaria
 ```{r}
+library(dplyr)
+library(ggplot2)
+
 delitos_temporal_h <- del %>%
   group_by(franja, tipo) %>%
   summarise(total_delitos = n(), .groups = "drop")
 
-delitos_temporal_h$franja <- as.character(delitos_temporal_h$franja)
+# Convertir 'franja' a numérico para asegurar el orden correcto
+delitos_temporal_h$franja <- as.numeric(as.character(delitos_temporal_h$franja))
 
+# Ordenar las franjas numéricamente
+delitos_temporal_h <- delitos_temporal_h %>%
+  arrange(franja)
 
+# Graficar con el eje X ordenado numéricamente
 ggplot(delitos_temporal_h, aes(x = franja, y = total_delitos, color = tipo, group = tipo)) +
   geom_line(size = 1) +
-  labs(title = "Evolución Temporal de Delitos por Tipo y franja horaria",
-       x = "Franja Horaria",
+  scale_x_continuous(breaks = sort(unique(delitos_temporal_h$franja))) +  # Eje X continuo
+  labs(title = "Evolución temporal de delitos por Tipo y Franja horaria",
+       x = "Franja Horaria (Ordenada de menor a mayor)",
        y = "Número de Delitos",
        color = "Tipo de Delito") +
-  theme_minimal()
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 
 
 ```
 
 
-### Frecuencia de Delitos por Barrio y Tipo 
+## Frecuencia de delitos por Barrio y Tipo 
 ```{r}
 library(ggplot2)
 library(dplyr)
@@ -352,7 +373,7 @@ top_barrios <- delitos_por_barrio
 ggplot(top_barrios, aes(x = barrio, y = total_delitos)) +
   geom_bar(stat = "identity", fill = "steelblue") +  # Color sólido para las barras
   labs(
-    title = "Frecuencia Total de Delitos por Barrio",
+    title = "Frecuencia de delitos por Barrio y Tipo",
     x = "Barrio",
     y = "Número de Delitos"
   ) +
@@ -368,7 +389,7 @@ ggsave("grafico_delitos_totales_barrio.png", width = 12, height = 8, dpi = 300)
 
 ```
 
-### Dia de semana vs Finde
+## Frecuencia de Delitos por Día de la Semana
 ```{r}
 # Agrupar los datos por día de la semana
 delitos_por_dia <- delitos %>%
@@ -392,7 +413,7 @@ ggplot(delitos_por_dia, aes(x = tipo_dia, y = total, fill = tipo_dia)) +
 
 
 ```
-### Frecuencia de Delitos por Estación del Año
+## Frecuencia de Delitos por Estación del Año
 ```{r}
 # Agrupar los datos por estación
 delitos_por_estacion <- delitos %>%
@@ -412,9 +433,9 @@ ggplot(delitos_por_estacion, aes(x = estacion, y = total, fill = estacion)) +
 ```
 
 
-# 3) Aplicación de FDA
+# 4) Aplicación de FDA
 
-## A) Frencuencia de delitos agrupados por franja (24) y fecha
+## A) Frecuencia de delitos agrupados por franja (24) y fecha
 
 ```{r}
 # Cargar librerías necesarias
@@ -459,12 +480,12 @@ colores <- rainbow(nrow(delitos_franja_matrix))
 png("grafico_franjas_sin_fda.png", width = 2000, height = 1200, res = 150)  # Resolución más alta
 
 # Ajustar márgenes: más espacio derecho para la leyenda
-par(mar = c(10, 35, 4, 4) + 0.1)  # Aumentar margen izquierdo
+par(mar = c(10, 20, 4, 4) + 0.1)  # Aumentar margen izquierdo
 
 # Graficar las curvas originales
 matplot(fechas_date, t(delitos_franja_matrix), type = "l", lty = 1, col = colores, lwd = 2,
         xlab = "Fecha", ylab = "Frecuencia", xaxt = "n",
-        main = "Curvas por Franja (Sin suavizado)")
+        main = "Curvas por Franja Sin FDA ni suavizado")
 
 # Crear etiquetas de fechas en el eje X
 fechas_etiquetas <- seq(min(fechas_date), max(fechas_date), by = "2 weeks")  # Mostrar cada dos semanas
@@ -518,7 +539,7 @@ colores <- rainbow(nrow(delitos_franja_matrix))  # Generar colores únicos para 
 png("grafico_franjas_con_fda.png", width = 2000, height = 1200, res = 150)  # Resolución más alta
 
 # Ajustar márgenes: más espacio derecho para la leyenda
-par(mar = c(10, 4, 4, 35) + 0.1)  # Aumentar margen derecho para que la leyenda no quede cortada
+par(mar = c(10, 4, 4, 20) + 0.1)  # Aumentar margen derecho para que la leyenda no quede cortada
 
 # Graficar las funciones suavizadas
 plot(fd_obj_suavizado, main = "Curvas por Franja suavizadas con FDA",
@@ -556,7 +577,7 @@ browseURL("grafico_franjas_con_fda.png")
 
 ![Curvas por Franja suavizadas con FDA](grafico_franjas_con_fda.png)
 
-## B) Frencuencia de delitos agrupados por barrio (48) y fecha
+## B) Frecuencia de delitos agrupados por barrio (48) y fecha
 
 Armamos la agrupación por barrio y fecha y creamos la matriz funcinal con barrios como filas y fechas como columnas
 
@@ -604,7 +625,7 @@ fechas_date <- seq.Date(from = as.Date("2023-01-01"), by = "day", length.out = n
 png("grafico_barrios_sin_fda.png", width = 2000, height = 1200, res = 150)  # Resolución más alta
 
 # Ajustar márgenes: más espacio izquierdo para la leyenda
-par(mar = c(10, 35, 4, 4) + 0.1)  # Aumentar margen izquierdo
+par(mar = c(10, 30, 4, 4) + 0.1)  # Aumentar margen izquierdo
 
 # Crear colores únicos para cada barrio
 colores <- rainbow(nrow(delitos_matrix))
@@ -722,18 +743,6 @@ ggplot(pca_data, aes(x = PC1, y = PC2, color = cluster_label)) +
 
 ```
 
-```{r}
-delitos_df <- as.data.frame(delitos_matrix) %>%
-  rownames_to_column(var = "barrio")  # Convertir rownames en columna llamada 'barrio'
-resumen_clusters <- clusters %>%
-  left_join(delitos_df, by = "barrio") %>%  # 'barrio' ya es una columna explícita
-  group_by(cluster) %>%
-  summarise_all(mean, na.rm = TRUE)
-
-print(resumen_clusters)
-
-```
-
 #### Aplicamos silhouette para validar los clusters
 
 ```{r}
@@ -786,7 +795,7 @@ colores <- rainbow(nrow(delitos_matrix))  # Generar colores únicos para cada ba
 png("grafico_barrios_con_fda.png", width = 2000, height = 1200, res = 150)  # Resolución más alta
 
 # Ajustar márgenes: más espacio derecho para la leyenda
-par(mar = c(10, 4, 4, 35) + 0.1)  # Aumentar margen derecho para que la leyenda no quede cortada
+par(mar = c(10, 4, 4, 28) + 0.1)  # Aumentar margen derecho para que la leyenda no quede cortada
 
 # Graficar las funciones suavizadas
 plot(fd_obj_suavizado, main = "Curvas por Barrio suavizadas con FDA",
